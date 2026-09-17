@@ -1,0 +1,337 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------
+// Phase 1 schema, implementing docs/26-database-schema-design.md as the
+// source of truth, cross-referenced with docs/07, /17, /18, /20, /05.
+//
+// A few fields/entities are not explicitly enumerated in docs/26 (which
+// has no dedicated "Job Model" or "Application Model" section, and never
+// mentions City or SavedJob at all). Where a concept was required by this
+// implementation task but only implied — not spelled out — by the docs,
+// the smallest conservative choice was made and is called out inline
+// below and in the implementation report, rather than silently invented.
+// -----------------------------------------------------------------------
+
+enum UserRole {
+  candidate
+  employer
+  admin
+}
+
+// Not named in docs/26; added because docs/06/11 describe an admin
+// "suspend a user" action, which needs a stateful field to actually act
+// on (ModerationAction alone only logs that an action happened).
+enum UserStatus {
+  active
+  suspended
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  role      UserRole
+  status    UserStatus @default(active)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  candidateProfile  CandidateProfile?
+  employerProfile   EmployerProfile?
+  postedJobs        Job[]              @relation("JobsPostedByUser")
+  moderationActions ModerationAction[] @relation("ModerationActionsByAdmin")
+  moderatedAsTarget ModerationAction[] @relation("ModerationActionsOnUser")
+
+  // Deliberately no password/credential column here: docs/19 confirms a
+  // proven off-the-shelf auth solution, vendor deferred. Guessing a
+  // self-rolled credential shape now could conflict with whatever
+  // solution's own adapter tables are chosen later.
+}
+
+model Country {
+  id                  String   @id @default(uuid())
+  isoCode             String   @unique
+  urlSlug             String   @unique
+  name                String
+  defaultCurrencyCode String
+  defaultLocale       String
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  cities            City[]
+  companies         Company[]
+  candidateProfiles CandidateProfile[]
+  jobs              Job[]
+}
+
+// Not defined as its own entity in docs/26 (§13 only mentions a
+// `city`/`locationText` scalar on CandidateProfile). This task's required
+// concept list treats "City" as a first-class concept alongside Country,
+// and docs/17 requires a non-empty "location" on every Job submission —
+// so City is modeled as a normalized lookup (mirroring Category), scoped
+// to a Country, rather than free text. Flagged for docs/26 to formally
+// adopt or revise.
+model City {
+  id        String   @id @default(uuid())
+  countryId String
+  name      String
+  slug      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  country           Country            @relation(fields: [countryId], references: [id])
+  candidateProfiles CandidateProfile[]
+  jobs              Job[]
+
+  @@unique([countryId, slug])
+}
+
+model Category {
+  id               String   @id @default(uuid())
+  name             String
+  slug             String   @unique
+  parentCategoryId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+  jobs     Job[]
+}
+
+model Skill {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  jobSkills       JobSkill[]
+  candidateSkills CandidateSkill[]
+}
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  websiteUrl  String?
+  logoUrl     String?
+  countryId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  country          Country?          @relation(fields: [countryId], references: [id])
+  employerProfiles EmployerProfile[]
+  jobs             Job[]
+}
+
+model CandidateProfile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  countryId     String
+  cityId        String?
+  fullName      String
+  headline      String?
+  resumeFileUrl String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id])
+  country         Country          @relation(fields: [countryId], references: [id])
+  city            City?            @relation(fields: [cityId], references: [id])
+  candidateSkills CandidateSkill[]
+  applications    Application[]
+  savedJobs       SavedJob[]
+}
+
+model EmployerProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  companyId String
+  jobTitle  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+}
+
+enum JobStatus {
+  pending_review
+  active
+  expired
+  closed
+  rejected
+}
+
+// Single value today, matching docs/17's "additive, not a retrofit" intent
+// for a future non-employer sourcing channel.
+enum JobSource {
+  employer_direct
+}
+
+enum ApplicationMethod {
+  on_platform
+  external_url
+}
+
+model Job {
+  id             String  @id @default(uuid())
+  companyId      String
+  countryId      String
+  cityId         String
+  categoryId     String
+  postedByUserId String
+  duplicateOfJobId String?
+
+  // title/description: required per docs/17's minimum-content-at-submission
+  // list; not spelled out as columns anywhere in docs/26 itself, but a Job
+  // cannot function without them.
+  title       String
+  description String
+
+  slug   String
+  status JobStatus @default(pending_review)
+  source JobSource @default(employer_direct)
+
+  applicationMethod      ApplicationMethod
+  externalApplicationUrl String?
+
+  // currencyCode is explicitly named in docs/26 §8; salaryMin/salaryMax are
+  // this task's minimal, necessary completion of it (a currency code with
+  // no amount is meaningless) — not an independently-approved field, so
+  // both are optional, matching that title/description/location/company
+  // are the only fields docs/17 requires at submission.
+  currencyCode String?
+  salaryMin    Int?
+  salaryMax    Int?
+
+  postedAt        DateTime?
+  expiresAt       DateTime?
+  closedAt        DateTime?
+  rejectionReason String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company           Company            @relation(fields: [companyId], references: [id])
+  country           Country            @relation(fields: [countryId], references: [id])
+  city              City               @relation(fields: [cityId], references: [id])
+  category          Category           @relation(fields: [categoryId], references: [id])
+  postedBy          User               @relation("JobsPostedByUser", fields: [postedByUserId], references: [id])
+  duplicateOf       Job?               @relation("JobDuplicates", fields: [duplicateOfJobId], references: [id])
+  duplicates        Job[]              @relation("JobDuplicates")
+  jobSkills         JobSkill[]
+  applications      Application[]
+  savedBy           SavedJob[]
+  moderationActions ModerationAction[]
+
+  @@unique([countryId, slug])
+  @@index([countryId, status])
+  @@index([status, expiresAt])
+  @@index([companyId])
+  @@index([categoryId])
+}
+
+model JobSkill {
+  id        String   @id @default(uuid())
+  jobId     String
+  skillId   String
+  createdAt DateTime @default(now())
+
+  job   Job   @relation(fields: [jobId], references: [id])
+  skill Skill @relation(fields: [skillId], references: [id])
+
+  @@unique([jobId, skillId])
+  @@index([skillId])
+}
+
+model CandidateSkill {
+  id                 String   @id @default(uuid())
+  candidateProfileId String
+  skillId            String
+  createdAt          DateTime @default(now())
+
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id])
+  skill            Skill            @relation(fields: [skillId], references: [id])
+
+  @@unique([candidateProfileId, skillId])
+  @@index([skillId])
+}
+
+// Single value today; docs/20 explicitly defers multi-stage statuses
+// "beyond received," implying "received" is the current baseline.
+enum ApplicationStatus {
+  received
+}
+
+model Application {
+  id                 String            @id @default(uuid())
+  jobId              String
+  candidateProfileId String
+  // Optional note/cover message — explicitly described in docs/20.
+  coverNote          String?
+  status             ApplicationStatus @default(received)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  deletedAt          DateTime?
+
+  job              Job              @relation(fields: [jobId], references: [id])
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id])
+
+  @@unique([jobId, candidateProfileId])
+  @@index([jobId])
+  @@index([candidateProfileId])
+}
+
+// Not defined in docs/26 at all — this task's required concept list adds
+// it. Modeled as the smallest possible candidate<->job bookmark, mirroring
+// Application's shape minus lifecycle/method fields, since "saving" a job
+// has no status or application method of its own.
+model SavedJob {
+  id                 String   @id @default(uuid())
+  candidateProfileId String
+  jobId              String
+  createdAt          DateTime @default(now())
+
+  candidateProfile CandidateProfile @relation(fields: [candidateProfileId], references: [id])
+  job              Job              @relation(fields: [jobId], references: [id])
+
+  @@unique([candidateProfileId, jobId])
+}
+
+model ModerationAction {
+  id           String   @id @default(uuid())
+  adminUserId  String
+  targetJobId  String?
+  targetUserId String?
+  // Free-text rather than an enum: docs/06/17 give examples (approve,
+  // reject, hide a listing, suspend a user) but never enumerate a
+  // complete, authoritative action vocabulary.
+  action       String
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  // Deliberately no deletedAt here despite docs/07's general "job
+  // postings, applications, admin actions" soft-delete note: soft-deleting
+  // an audit log entry would defeat the auditability principle in
+  // docs/11-security-principles.md.
+  admin      User  @relation("ModerationActionsByAdmin", fields: [adminUserId], references: [id])
+  targetJob  Job?  @relation(fields: [targetJobId], references: [id])
+  targetUser User? @relation("ModerationActionsOnUser", fields: [targetUserId], references: [id])
+
+  @@index([targetJobId])
+  @@index([targetUserId])
+}

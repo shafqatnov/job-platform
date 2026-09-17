@@ -1,0 +1,128 @@
+/*
+ * Design tokens for the Global Job Platform.
+ *
+ * Static scales (brand/accent/neutral/semantic colors, typography, radius,
+ * shadows) live in the @theme block below and are the same in light and
+ * dark mode. Tokens that must differ by theme (background, foreground,
+ * surface, border, focus ring) are defined as plain CSS custom properties
+ * on :root / the dark media query, then re-exposed to Tailwind via
+ * @theme inline — the same pattern the original scaffold used for
+ * --background/--foreground, extended here to the rest of the system.
+ *
+ * Responsive breakpoints and the base spacing scale intentionally use
+ * Tailwind's built-in defaults (sm/md/lg/xl/2xl, 0.25rem spacing step) —
+ * they already fit this product and redefining them would add complexity
+ * with no benefit.
+ */
+
+@theme {
+  /* Brand (primary) — indigo. Trustworthy, modern, not tied to one country. */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
+  --color-brand-900: #312e81;
+  --color-brand-950: #1e1b4b;
+
+  /* Accent (secondary) — teal. Used sparingly for secondary emphasis. */
+  --color-accent-50: #f0fdfa;
+  --color-accent-100: #ccfbf1;
+  --color-accent-200: #99f6e4;
+  --color-accent-300: #5eead4;
+  --color-accent-400: #2dd4bf;
+  --color-accent-500: #14b8a6;
+  --color-accent-600: #0d9488;
+  --color-accent-700: #0f766e;
+  --color-accent-800: #115e59;
+  --color-accent-900: #134e4a;
+
+  /* Neutral — cool slate gray, used for text, surfaces, and borders. */
+  --color-neutral-50: #f8fafc;
+  --color-neutral-100: #f1f5f9;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+  --color-neutral-950: #020617;
+
+  /* Semantic state colors — feedback, status, and lifecycle indicators. */
+  --color-success-50: #f0fdf4;
+  --color-success-600: #16a34a;
+  --color-success-700: #15803d;
+  --color-warning-50: #fffbeb;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+  --color-danger-50: #fef2f2;
+  --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
+  --color-info-50: #f0f9ff;
+  --color-info-600: #0284c7;
+  --color-info-700: #0369a1;
+
+  /* Typography: display scale for hero/marketing headings, layered on top
+     of Tailwind's existing text-xs..text-9xl scale (kept as-is). */
+  --text-display-sm: 2rem;
+  --text-display-sm--line-height: 2.5rem;
+  --text-display-md: 2.75rem;
+  --text-display-md--line-height: 3.25rem;
+  --text-display-lg: 3.5rem;
+  --text-display-lg--line-height: 4rem;
+
+  /* Border radius: a moderate, premium-leaning scale (overrides Tailwind's
+     defaults for these same utility names). */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
+  /* Shadows: soft, low-contrast elevation rather than harsh drop shadows. */
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.04);
+  --shadow-lg: 0 12px 24px -4px rgb(15 23 42 / 0.1), 0 4px 8px -2px rgb(15 23 42 / 0.04);
+  --shadow-xl: 0 24px 48px -12px rgb(15 23 42 / 0.16), 0 8px 16px -4px rgb(15 23 42 / 0.06);
+}
+
+/* Semantic, theme-aware tokens — light values. */
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-muted: #f8fafc;
+  --border: #e2e8f0;
+  --muted-foreground: #475569;
+  --focus-ring: #4f46e5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b1120;
+    --foreground: #f1f5f9;
+    --surface: #101826;
+    --surface-muted: #0f172a;
+    --border: #1e293b;
+    --muted-foreground: #94a3b8;
+    --focus-ring: #818cf8;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-focus-ring: var(--focus-ring);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
