@@ -8,6 +8,7 @@ import { LatestJobsSection } from "@/features/jobs/LatestJobsSection";
 import { PopularCategories } from "@/features/jobs/PopularCategories";
 import { PopularCountries } from "@/features/jobs/PopularCountries";
 import { EmployerCta } from "@/features/employers/EmployerCta";
+import { getPublicJobs } from "@/services/jobs/getPublicJobs";
 
 export const metadata: Metadata = {
   title: "Find Jobs Worldwide",
@@ -15,7 +16,12 @@ export const metadata: Metadata = {
     "Search jobs across multiple countries and industries, and apply directly with verified employers on a global job search platform built for candidates and employers.",
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Fetched once here (not inside each section) so both Featured and
+  // Latest read from a single real query — see getPublicJobs.ts, the
+  // one place allowed to query Job for public visibility.
+  const jobs = await getPublicJobs();
+
   return (
     <>
       <Section aria-labelledby="hero-heading" className="relative overflow-hidden">
@@ -56,8 +62,8 @@ export default function HomePage() {
         <AdSlot size="leaderboard" />
       </Container>
 
-      <FeaturedJobsSection />
-      <LatestJobsSection />
+      <FeaturedJobsSection jobs={jobs} />
+      <LatestJobsSection jobs={jobs} />
       <PopularCategories />
       <PopularCountries />
 

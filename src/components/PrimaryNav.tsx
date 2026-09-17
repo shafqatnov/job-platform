@@ -10,7 +10,7 @@ export type PrimaryNavProps = {
 /** Desktop primary navigation. Hidden on small screens by the caller. */
 export function PrimaryNav({ items, className }: PrimaryNavProps) {
   return (
-    <nav aria-label="Primary" className={cn("items-center gap-8", className)}>
+    <nav aria-label="Primary" className={cn("flex items-center gap-8", className)}>
       {items.map((item) => (
         <Link
           key={item.href}

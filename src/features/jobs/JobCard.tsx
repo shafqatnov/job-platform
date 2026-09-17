@@ -34,7 +34,7 @@ export function JobCard({ job }: JobCardProps) {
       </div>
       <div className="flex flex-wrap gap-2">
         <Badge variant="neutral">{location}</Badge>
-        <Badge variant="neutral">{job.employmentType}</Badge>
+        {job.employmentType ? <Badge variant="neutral">{job.employmentType}</Badge> : null}
         {job.workMode ? <Badge variant="brand">{job.workMode}</Badge> : null}
       </div>
       {salary ? <p className="text-sm font-medium text-foreground">{salary}</p> : null}

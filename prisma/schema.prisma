@@ -39,8 +39,19 @@ enum UserStatus {
 }
 
 model User {
-  id        String     @id @default(uuid())
-  email     String     @unique
+  id    String @id @default(uuid())
+  email String @unique
+
+  // Better Auth's required base User fields (added per the Prisma 7
+  // compatibility spike against @better-auth/core@1.7.5's schema source).
+  // These are identity fields Better Auth owns and manages directly.
+  name          String
+  emailVerified Boolean @default(false)
+  image         String?
+
+  // role/status remain exclusively ours: Better Auth only establishes
+  // identity/session (docs/19's role-binding principle) — authorization
+  // stays in src/services, never in a Better Auth plugin.
   role      UserRole
   status    UserStatus @default(active)
   createdAt DateTime   @default(now())
@@ -51,11 +62,72 @@ model User {
   postedJobs        Job[]              @relation("JobsPostedByUser")
   moderationActions ModerationAction[] @relation("ModerationActionsByAdmin")
   moderatedAsTarget ModerationAction[] @relation("ModerationActionsOnUser")
+  sessions          Session[]
+  accounts          Account[]
 
-  // Deliberately no password/credential column here: docs/19 confirms a
-  // proven off-the-shelf auth solution, vendor deferred. Guessing a
-  // self-rolled credential shape now could conflict with whatever
-  // solution's own adapter tables are chosen later.
+  // Password hashes are NOT stored here — Better Auth's email/password
+  // ("credential") provider stores them on Account.password, keyed by
+  // (providerId, accountId), not on User.
+}
+
+// Better Auth session table — one row per active login session. Session
+// lookup is by `token` (the value carried in the secure HTTP-only cookie),
+// so it must be unique. Field shapes verified against
+// @better-auth/core@1.7.5's session schema during the compatibility spike.
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+// Better Auth account/credential table. For Phase 1 (email/password only)
+// this holds exactly one row per user: providerId = "credential",
+// accountId identifies the user within that provider, password is the
+// hashed credential. The OAuth-only fields stay unused and nullable until
+// (if ever) a social provider is enabled. Field shapes verified against
+// @better-auth/core@1.7.5's account schema during the compatibility spike.
+model Account {
+  id                    String    @id @default(uuid())
+  userId                String
+  providerId            String
+  accountId             String
+  password              String?
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+// Better Auth verification-token table (email verification, password
+// reset). Field shapes verified against @better-auth/core@1.7.5's
+// verification schema during the compatibility spike.
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
 }
 
 model Country {

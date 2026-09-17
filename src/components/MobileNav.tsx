@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { NavItem } from "@/constants/navigation";
 
 export type MobileNavProps = {
   items: NavItem[];
   className?: string;
+  /** Extra content rendered at the bottom of the panel, e.g. account/sign-in links. */
+  children?: ReactNode;
 };
 
 /**
@@ -15,7 +17,7 @@ export type MobileNavProps = {
  * animation library) — a starting point future dashboard/candidate/
  * employer navs can follow the same pattern for.
  */
-export function MobileNav({ items, className }: MobileNavProps) {
+export function MobileNav({ items, className, children }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -55,6 +57,7 @@ export function MobileNav({ items, className }: MobileNavProps) {
               </li>
             ))}
           </ul>
+          {children ? <div className="mt-3 border-t border-border pt-3">{children}</div> : null}
         </nav>
       ) : null}
     </div>

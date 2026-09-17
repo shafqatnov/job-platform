@@ -8,7 +8,7 @@ import { getButtonClassName } from "@/components/Button";
 import { JobFiltersBar } from "@/features/jobs/JobFiltersBar";
 import { JobCard } from "@/features/jobs/JobCard";
 import { SORT_OPTIONS } from "@/features/jobs/constants";
-import type { JobListItem } from "@/features/jobs/types";
+import { getPublicJobs } from "@/services/jobs/getPublicJobs";
 import type { CountryOption } from "@/constants/countries";
 
 export type JobsListingViewProps = {
@@ -17,13 +17,16 @@ export type JobsListingViewProps = {
 };
 
 /**
- * Shared presentation for both /jobs and /{country}/jobs. No database
- * exists yet, so `jobs` is a genuinely empty, correctly-typed array —
- * never populated with invented records — and the empty state renders
- * instead of any job cards.
+ * Shared presentation for both /jobs and /{country}/jobs. Reads
+ * currently-publishable jobs through the jobs service (never Prisma
+ * directly — see src/services/jobs/getPublicJobs.ts). If the query
+ * genuinely fails, that error is allowed to propagate to the (public)
+ * route group's error boundary rather than being caught here and shown
+ * as an empty result, which would misrepresent a system failure as
+ * "no jobs yet."
  */
-export function JobsListingView({ country }: JobsListingViewProps) {
-  const jobs: JobListItem[] = [];
+export async function JobsListingView({ country }: JobsListingViewProps) {
+  const jobs = await getPublicJobs({ countryUrlSlug: country?.slug });
 
   const heading = country ? `Jobs in ${country.name}` : "Browse All Jobs";
   const intro = country
@@ -65,7 +68,7 @@ export function JobsListingView({ country }: JobsListingViewProps) {
             title={country ? `No jobs published in ${country.name} yet` : "No jobs published yet"}
             description="New listings will appear here as soon as employers start posting. Check back soon, or be the first to post a role."
             action={
-              <Link href="/employers" className={getButtonClassName({ variant: "outline", size: "sm" })}>
+              <Link href="/employer" className={getButtonClassName({ variant: "outline", size: "sm" })}>
                 Post a job
               </Link>
             }

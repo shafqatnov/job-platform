@@ -3,6 +3,7 @@ import { Container } from "@/components/Container";
 import { PrimaryNav } from "@/components/PrimaryNav";
 import { MobileNav } from "@/components/MobileNav";
 import { getButtonClassName } from "@/components/Button";
+import { AccountNav } from "@/features/auth/AccountNav";
 import { PRIMARY_NAV_ITEMS, EMPLOYER_CTA_ITEM } from "@/constants/navigation";
 
 const MOBILE_NAV_ITEMS = [...PRIMARY_NAV_ITEMS, EMPLOYER_CTA_ITEM];
@@ -27,9 +28,12 @@ export function Header() {
           <Link href={EMPLOYER_CTA_ITEM.href} className={getButtonClassName({ size: "sm" })}>
             {EMPLOYER_CTA_ITEM.label}
           </Link>
+          <AccountNav />
         </div>
 
-        <MobileNav items={MOBILE_NAV_ITEMS} className="md:hidden" />
+        <MobileNav items={MOBILE_NAV_ITEMS} className="md:hidden">
+          <AccountNav />
+        </MobileNav>
       </Container>
     </header>
   );

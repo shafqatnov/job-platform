@@ -14,7 +14,7 @@ export function EmployerCta() {
           </p>
         </div>
         <Link
-          href="/employers"
+          href="/employer"
           className="inline-flex h-12 shrink-0 items-center justify-center rounded-md border border-white px-6 text-base font-medium text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-600"
         >
           Post a Job

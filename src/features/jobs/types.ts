@@ -15,7 +15,10 @@ export type JobListItem = {
   countrySlug: string;
   countryName: string;
   city?: string;
-  employmentType: string;
+  // Neither employmentType nor workMode exists as a column on Job yet
+  // (see prisma/schema.prisma) — both stay optional so real query results
+  // never need to fabricate a value for them.
+  employmentType?: string;
   workMode?: string;
   salaryMin?: number;
   salaryMax?: number;
