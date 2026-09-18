@@ -1,6 +1,6 @@
-import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { processPendingJobs } from "@/services/moderation/processPendingJobs";
+import { checkSecureTrigger } from "@/lib/security/secureTrigger";
 
 /**
  * Scheduler-agnostic trigger for the AI moderation pipeline — mirrors
@@ -9,41 +9,34 @@ import { processPendingJobs } from "@/services/moderation/processPendingJobs";
  * authenticated HTTP endpoint any future scheduler can be pointed at).
  * Uses its own dedicated secret (AI_MODERATION_TRIGGER_SECRET) rather
  * than reusing JOB_EXPIRY_CRON_SECRET, so the two independent
- * background jobs stay separately authorized.
+ * background jobs stay separately authorized, and its own rate-limit
+ * bucket so a flood against one endpoint never affects the other.
  *
- * Authorization: constant-time comparison, fails closed on any missing/
- * incorrect secret or missing env var. Never returns the secret, and
- * never returns AI explanation text, job title/description, or any
- * other sensitive content in the response — only aggregate counts.
+ * Authorization + abuse protection: src/lib/security/secureTrigger.ts —
+ * constant-time comparison, fails closed on any missing/incorrect
+ * secret or missing env var. Never returns the secret, and never
+ * returns AI explanation text, job title/description, or any other
+ * sensitive content in the response — only aggregate counts.
+ *
+ * Also exported as GET (same handler, identical checks): Vercel's own
+ * native Cron Jobs feature (a `crons` entry in vercel.json) always
+ * invokes its configured path with an HTTP GET request — it has no way
+ * to send a POST. The original POST export is preserved unchanged for
+ * any other external scheduler that can send POST.
  */
-function isAuthorizedRequest(request: Request): boolean {
-  const expectedSecret = process.env.AI_MODERATION_TRIGGER_SECRET;
-  if (!expectedSecret) {
-    return false;
-  }
-
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return false;
-  }
-
-  const providedSecret = authHeader.slice("Bearer ".length);
-  const expectedBuffer = Buffer.from(expectedSecret);
-  const providedBuffer = Buffer.from(providedSecret);
-
-  if (expectedBuffer.length !== providedBuffer.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(expectedBuffer, providedBuffer);
-}
-
 export async function POST(request: Request) {
-  if (!isAuthorizedRequest(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const check = checkSecureTrigger(request, {
+    secretEnvVar: "AI_MODERATION_TRIGGER_SECRET",
+    bucketKey: "moderation:process-pending-jobs",
+  });
+  if (!check.ok) {
+    const message = check.status === 429 ? "Too many requests" : "Unauthorized";
+    return NextResponse.json({ error: message }, { status: check.status });
   }
 
   const summary = await processPendingJobs();
 
   return NextResponse.json({ success: true, ...summary });
 }
+
+export { POST as GET };

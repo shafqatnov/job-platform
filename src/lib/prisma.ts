@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
+import { validateEnvOnce } from "@/lib/env";
 
 /**
  * Single shared Prisma Client instance for the whole app.
@@ -26,6 +27,12 @@ import { PrismaClient } from "@/generated/prisma/client";
 declare global {
   var prismaGlobal: PrismaClient | undefined;
 }
+
+// Every server-side code path imports this module, making it the one
+// reliable place to validate required configuration is present before
+// any query runs — see src/lib/env.ts for exactly what is checked
+// (names only; values are never read back or logged).
+validateEnvOnce();
 
 const adapter = new PrismaPg(process.env.DATABASE_URL ?? "");
 

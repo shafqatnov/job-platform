@@ -28,6 +28,16 @@ const securityHeaders = [
   // Denies browser features this app has no use for; does not restrict
   // anything the app actually uses.
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  // Isolates this app's browsing context from cross-origin windows it
+  // opens/is opened by. Safe now: Better Auth's email/password flow
+  // never opens a cross-origin popup (no OAuth is configured), and
+  // external application links already carry rel="noopener" separately.
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // Prevents other origins from embedding this app's own responses
+  // (images, scripts, etc.) into their pages. Safe now: nothing in this
+  // app is designed to be embedded cross-origin, and no CDN/asset host
+  // on a different origin is in use.
+  { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
 ];
 
 const nextConfig: NextConfig = {

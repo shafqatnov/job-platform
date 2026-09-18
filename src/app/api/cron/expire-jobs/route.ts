@@ -1,6 +1,6 @@
-import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { expireDueJobs } from "@/services/jobs/expireJobs";
+import { checkSecureTrigger } from "@/lib/security/secureTrigger";
 
 /**
  * Scheduler-agnostic trigger for the documented active->expired job
@@ -14,37 +14,27 @@ import { expireDueJobs } from "@/services/jobs/expireJobs";
  * a third-party pinger, etc.) can be pointed at later without this
  * route or its logic changing.
  *
- * Authorization: a constant-time comparison against
- * JOB_EXPIRY_CRON_SECRET (a server-side-only secret, never committed,
- * never returned in any response). Fails closed — a missing/incorrect
- * secret, or a missing env var, is always rejected as 401, never
- * silently treated as authorized.
+ * Authorization + abuse protection: src/lib/security/secureTrigger.ts —
+ * constant-time secret comparison (fails closed on any missing/
+ * incorrect secret or missing env var) plus a shared in-memory rate
+ * limit, documented there as not multi-instance-safe. Never returns the
+ * secret in any response.
+ *
+ * Also exported as GET (same handler, identical checks): Vercel's own
+ * native Cron Jobs feature (a `crons` entry in vercel.json) always
+ * invokes its configured path with an HTTP GET request — it has no way
+ * to send a POST. The original POST export is preserved unchanged for
+ * any other external scheduler (GitHub Actions, a third-party pinger,
+ * etc.) that can send POST, exactly as this route already documented.
  */
-function isAuthorizedRequest(request: Request): boolean {
-  const expectedSecret = process.env.JOB_EXPIRY_CRON_SECRET;
-  if (!expectedSecret) {
-    return false;
-  }
-
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return false;
-  }
-
-  const providedSecret = authHeader.slice("Bearer ".length);
-  const expectedBuffer = Buffer.from(expectedSecret);
-  const providedBuffer = Buffer.from(providedSecret);
-
-  if (expectedBuffer.length !== providedBuffer.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(expectedBuffer, providedBuffer);
-}
-
 export async function POST(request: Request) {
-  if (!isAuthorizedRequest(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const check = checkSecureTrigger(request, {
+    secretEnvVar: "JOB_EXPIRY_CRON_SECRET",
+    bucketKey: "cron:expire-jobs",
+  });
+  if (!check.ok) {
+    const message = check.status === 429 ? "Too many requests" : "Unauthorized";
+    return NextResponse.json({ error: message }, { status: check.status });
   }
 
   const result = await expireDueJobs();
@@ -55,3 +45,5 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ success: true, expiredCount: result.expiredCount });
 }
+
+export { POST as GET };
