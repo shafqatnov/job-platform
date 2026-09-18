@@ -6,11 +6,17 @@ export type ApplyToJobInput = {
   /** Must come from the authenticated session — never client-supplied. */
   userId: string;
   jobId: string;
+  /** Optional — Application.coverNote is nullable. */
+  coverNote?: string;
 };
 
 export type ApplyToJobResult =
   | { success: true; applicationId: string }
   | { success: false; error: string };
+
+// Shorter than createJob.ts's MAX_DESCRIPTION_LENGTH (10000) — a cover
+// note is a brief note, not a full document.
+const MAX_COVER_NOTE_LENGTH = 2000;
 
 /**
  * Creates one on-platform application on behalf of the authenticated
@@ -31,6 +37,11 @@ export type ApplyToJobResult =
  * constraint (caught as P2002) as the real race-safe guarantee.
  */
 export async function applyToJob(input: ApplyToJobInput): Promise<ApplyToJobResult> {
+  const trimmedCoverNote = input.coverNote?.trim() ?? "";
+  if (trimmedCoverNote.length > MAX_COVER_NOTE_LENGTH) {
+    return { success: false, error: `Cover note must be ${MAX_COVER_NOTE_LENGTH} characters or fewer.` };
+  }
+
   const candidateProfile = await getCandidateProfile(input.userId);
   if (!candidateProfile) {
     return { success: false, error: "Create your candidate profile before applying." };
@@ -60,7 +71,11 @@ export async function applyToJob(input: ApplyToJobInput): Promise<ApplyToJobResu
 
   try {
     const application = await prisma.application.create({
-      data: { jobId: job.id, candidateProfileId: candidateProfile.id },
+      data: {
+        jobId: job.id,
+        candidateProfileId: candidateProfile.id,
+        coverNote: trimmedCoverNote || null,
+      },
       select: { id: true },
     });
 

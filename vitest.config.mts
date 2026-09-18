@@ -23,6 +23,17 @@ export default defineConfig({
     // first query of a run, well beyond Vitest's 5s default.
     testTimeout: 20000,
     hookTimeout: 20000,
+    // Vitest's default is to run test FILES in parallel across several
+    // workers. With enough real-Neon-database test files now (Version
+    // 1.1's candidate-dashboard suite added several more), running them
+    // all at once caused genuine connection-pool contention — multiple
+    // files' beforeAll fixture setup competing for Neon's serverless
+    // pooler at the same moment, timing out well before any single
+    // file's own (already-generous) 20s hook budget. Running files
+    // sequentially trades some wall-clock time for eliminating that
+    // contention outright; each file's own tests still run at normal
+    // speed once it has the database to itself.
+    fileParallelism: false,
   },
   resolve: {
     alias: {

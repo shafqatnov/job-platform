@@ -18,12 +18,8 @@ export type ApplyToJobActionState = {
  */
 export async function applyToJobAction(
   jobId: string,
-  // Required by useActionState's action signature (see ApplyButton.tsx)
-  // even though applying needs no prior state or form fields.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _prevState: ApplyToJobActionState,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _formData: FormData
+  formData: FormData
 ): Promise<ApplyToJobActionState> {
   const user = await getSessionUser();
   if (!user || user.status !== "active") {
@@ -33,7 +29,8 @@ export async function applyToJobAction(
     return { error: "Only candidate accounts can apply for jobs." };
   }
 
-  const result = await applyToJob({ userId: user.id, jobId });
+  const coverNote = String(formData.get("coverNote") ?? "");
+  const result = await applyToJob({ userId: user.id, jobId, coverNote });
   if (!result.success) {
     return { error: result.error };
   }

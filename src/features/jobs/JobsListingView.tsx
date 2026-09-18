@@ -7,9 +7,15 @@ import { Select } from "@/components/Select";
 import { getButtonClassName } from "@/components/Button";
 import { JobFiltersBar } from "@/features/jobs/JobFiltersBar";
 import { JobCard } from "@/features/jobs/JobCard";
+import type { SaveState } from "@/features/jobs/SaveJobButton";
 import { SORT_OPTIONS } from "@/features/jobs/constants";
 import { getPublicJobs } from "@/services/jobs/getPublicJobs";
 import { getCountryByCode, type CountryOption } from "@/constants/countries";
+import { getSessionUser } from "@/services/auth/getSessionUser";
+import { getCandidateProfile } from "@/services/candidates/getCandidateProfile";
+import { getSavedJobIdSet } from "@/services/candidates/getSavedJobs";
+
+const CREATE_PROFILE_HREF = "/candidate/profile/create";
 
 export type JobListingFilters = {
   /** Raw keyword query (searchParams "q") — matched against title/description. */
@@ -50,6 +56,23 @@ export async function JobsListingView({ country, filters }: JobsListingViewProps
     categorySlug: filters?.categorySlug,
     keywords: filters?.keywords,
   });
+
+  // Save-button state for every card on this page, computed once (not
+  // per card) to avoid an N+1 query: a single batched lookup of which
+  // of these job IDs the viewer has already saved, per
+  // getSavedJobIdSet's own doc comment.
+  const user = await getSessionUser();
+  const candidateProfile = user && user.role === "candidate" ? await getCandidateProfile(user.id) : null;
+  const savedJobIds = candidateProfile
+    ? await getSavedJobIdSet(candidateProfile.id, jobs.map((job) => job.id))
+    : new Set<string>();
+
+  function saveStateFor(jobId: string): SaveState {
+    if (!user) return "signed_out";
+    if (user.role !== "candidate") return "not_candidate";
+    if (!candidateProfile) return "no_profile";
+    return savedJobIds.has(jobId) ? "saved" : "unsaved";
+  }
 
   const heading = country ? `Jobs in ${country.name}` : "Browse All Jobs";
   const intro = country
@@ -104,7 +127,7 @@ export async function JobsListingView({ country, filters }: JobsListingViewProps
           <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {jobs.map((job) => (
               <li key={job.id}>
-                <JobCard job={job} />
+                <JobCard job={job} saveState={saveStateFor(job.id)} createProfileHref={CREATE_PROFILE_HREF} />
               </li>
             ))}
           </ul>

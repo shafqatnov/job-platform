@@ -7,7 +7,9 @@ import { JobDetailView } from "@/features/jobs/JobDetailView";
 import { getSessionUser } from "@/services/auth/getSessionUser";
 import { getCandidateProfile } from "@/services/candidates/getCandidateProfile";
 import { hasApplied } from "@/services/applications/hasApplied";
+import { isJobSaved } from "@/services/candidates/isJobSaved";
 import type { ApplyState } from "@/features/jobs/ApplyButton";
+import type { SaveState } from "@/features/jobs/SaveJobButton";
 import { getConfiguredSiteUrl } from "@/lib/siteUrl";
 
 export async function generateMetadata({
@@ -80,16 +82,21 @@ export default async function JobDetailPage({
 
   const user = await getSessionUser();
   let applyState: ApplyState;
+  let saveState: SaveState;
   if (!user) {
     applyState = "signed_out";
+    saveState = "signed_out";
   } else if (user.role !== "candidate") {
     applyState = "not_candidate";
+    saveState = "not_candidate";
   } else {
     const candidateProfile = await getCandidateProfile(user.id);
     if (!candidateProfile) {
       applyState = "no_profile";
+      saveState = "no_profile";
     } else {
       applyState = (await hasApplied(candidateProfile.id, job.id)) ? "already_applied" : "can_apply";
+      saveState = (await isJobSaved(candidateProfile.id, job.id)) ? "saved" : "unsaved";
     }
   }
 
@@ -143,6 +150,7 @@ export default async function JobDetailPage({
         job={job}
         relatedJobs={relatedJobs}
         applyState={applyState}
+        saveState={saveState}
         createProfileHref={createProfileHref}
       />
     </>

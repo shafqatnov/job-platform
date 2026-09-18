@@ -1,10 +1,20 @@
 import Link from "next/link";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
+import { SaveJobButton, type SaveState } from "@/features/jobs/SaveJobButton";
 import type { JobListItem } from "@/features/jobs/types";
 
 export type JobCardProps = {
   job: JobListItem;
+  /**
+   * Omitted entirely (the default) for every existing caller that
+   * doesn't pass it — FeaturedJobsSection, the related-jobs list on the
+   * job detail page, etc. — so this addition changes nothing for them.
+   * Only callers that explicitly compute a viewer's save state (the
+   * main jobs listing, the saved-jobs page) opt in by passing it.
+   */
+  saveState?: SaveState;
+  createProfileHref?: string;
 };
 
 /**
@@ -14,7 +24,7 @@ export type JobCardProps = {
  * service exists; until then this component's map() call has nothing to
  * iterate over.
  */
-export function JobCard({ job }: JobCardProps) {
+export function JobCard({ job, saveState, createProfileHref }: JobCardProps) {
   const location = [job.city, job.countryName].filter(Boolean).join(", ");
   const salary =
     job.salaryMin !== undefined && job.salaryMax !== undefined && job.currencyCode
@@ -38,6 +48,11 @@ export function JobCard({ job }: JobCardProps) {
         {job.workMode ? <Badge variant="brand">{job.workMode}</Badge> : null}
       </div>
       {salary ? <p className="text-sm font-medium text-foreground">{salary}</p> : null}
+      {saveState ? (
+        <div className="mt-auto pt-1">
+          <SaveJobButton jobId={job.id} saveState={saveState} createProfileHref={createProfileHref} />
+        </div>
+      ) : null}
     </Card>
   );
 }

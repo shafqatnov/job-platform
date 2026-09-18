@@ -40,6 +40,11 @@ export function AccountNav() {
           Dashboard
         </Link>
       ) : null}
+      {session.user.role === "candidate" ? (
+        <Link href="/candidate" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+          Dashboard
+        </Link>
+      ) : null}
       <span className="hidden text-sm text-muted-foreground sm:inline">{session.user.name}</span>
       <SignOutButton />
     </div>

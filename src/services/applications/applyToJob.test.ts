@@ -91,4 +91,54 @@ describe("applyToJob duplicate prevention (real dev database, temporary fixtures
       await prisma.user.deleteMany({ where: { id: otherUser.id } });
     }
   });
+
+  it("stores no cover note (null) when none is provided — matches this suite's very first application above", async () => {
+    const application = await prisma.application.findFirstOrThrow({
+      where: { candidateProfileId, jobId },
+      select: { coverNote: true },
+    });
+    expect(application.coverNote).toBeNull();
+  });
+
+  it("accepts an optional cover note and stores it, trimmed, through the existing application creation path", async () => {
+    const job = await createTestJob(employerFixtures, {
+      title: `[APPLY TEST] Cover Note Job ${crypto.randomUUID().slice(0, 8)}`,
+      status: "active",
+      applicationMethod: "on_platform",
+    });
+
+    const result = await applyToJob({
+      userId: candidateUserId,
+      jobId: job.id,
+      coverNote: "  I'm very interested in this role.  ",
+    });
+
+    expect(result.success).toBe(true);
+    const application = await prisma.application.findFirstOrThrow({
+      where: { candidateProfileId, jobId: job.id },
+      select: { coverNote: true },
+    });
+    expect(application.coverNote).toBe("I'm very interested in this role.");
+  });
+
+  it("rejects a cover note over the maximum length and creates no application row", async () => {
+    const job = await createTestJob(employerFixtures, {
+      title: `[APPLY TEST] Cover Note Too Long Job ${crypto.randomUUID().slice(0, 8)}`,
+      status: "active",
+      applicationMethod: "on_platform",
+    });
+
+    const result = await applyToJob({
+      userId: candidateUserId,
+      jobId: job.id,
+      coverNote: "x".repeat(2001),
+    });
+
+    expect(result).toEqual({ success: false, error: "Cover note must be 2000 characters or fewer." });
+    const application = await prisma.application.findFirst({
+      where: { candidateProfileId, jobId: job.id },
+      select: { id: true },
+    });
+    expect(application).toBeNull();
+  });
 });

@@ -64,7 +64,20 @@ export function ApplyButton({ jobId, applyState, createProfileHref }: ApplyButto
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-2">
+    <form action={formAction} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="apply-cover-note" className="text-sm font-medium text-foreground">
+          Cover note (optional)
+        </label>
+        <textarea
+          id="apply-cover-note"
+          name="coverNote"
+          rows={4}
+          maxLength={2000}
+          placeholder="Introduce yourself or explain why you're a good fit (optional)."
+          className="rounded-md border border-border bg-surface px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        />
+      </div>
       <Button type="submit" fullWidth disabled={isPending}>
         {isPending ? "Applying…" : "Apply Now"}
       </Button>

@@ -6,6 +6,7 @@ import { AdSlot } from "@/components/AdSlot";
 import { getButtonClassName } from "@/components/Button";
 import { JobCard } from "@/features/jobs/JobCard";
 import { ApplyButton, type ApplyState } from "@/features/jobs/ApplyButton";
+import { SaveJobButton, type SaveState } from "@/features/jobs/SaveJobButton";
 import type { PublicJobDetail } from "@/services/jobs/getPublicJobBySlug";
 import type { JobListItem } from "@/features/jobs/types";
 
@@ -15,6 +16,7 @@ export type JobDetailViewProps = {
   relatedJobs: JobListItem[];
   /** Only meaningful when applicationMethod is on_platform — see ApplyButton. */
   applyState: ApplyState;
+  saveState: SaveState;
   createProfileHref: string;
 };
 
@@ -33,7 +35,7 @@ function formatSalary(job: PublicJobDetail): string | undefined {
   return `${job.currencyCode} ${job.salaryMin.toLocaleString()}–${job.salaryMax.toLocaleString()}`;
 }
 
-export function JobDetailView({ job, relatedJobs, applyState, createProfileHref }: JobDetailViewProps) {
+export function JobDetailView({ job, relatedJobs, applyState, saveState, createProfileHref }: JobDetailViewProps) {
   const salary = formatSalary(job);
   const hasExternalUrl = job.applicationMethod === "external_url" && Boolean(job.externalApplicationUrl);
 
@@ -92,6 +94,9 @@ export function JobDetailView({ job, relatedJobs, applyState, createProfileHref 
               ) : (
                 <ApplyButton jobId={job.id} applyState={applyState} createProfileHref={createProfileHref} />
               )}
+              <div className="border-t border-border pt-3">
+                <SaveJobButton jobId={job.id} saveState={saveState} createProfileHref={createProfileHref} />
+              </div>
             </Card>
           </aside>
         </div>
