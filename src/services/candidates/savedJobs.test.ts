@@ -24,6 +24,7 @@ describe("Saved jobs (real dev database, temporary fixtures)", () => {
   let activeJobId: string;
   let pendingJobId: string;
   let expiredJobId: string;
+  let deletedJobId: string;
 
   beforeAll(async () => {
     jobFixtures = await createModerationTestFixtures();
@@ -48,6 +49,13 @@ describe("Saved jobs (real dev database, temporary fixtures)", () => {
       expiresAt: new Date(Date.now() - 60 * 60 * 1000),
     });
     expiredJobId = expiredJob.id;
+
+    const deletedJob = await createTestJob(jobFixtures, {
+      title: `[AI MODERATION TEST] Saved Job Deleted ${crypto.randomUUID().slice(0, 8)}`,
+      status: "active",
+      deletedAt: new Date(),
+    });
+    deletedJobId = deletedJob.id;
   });
 
   afterAll(async () => {
@@ -83,6 +91,12 @@ describe("Saved jobs (real dev database, temporary fixtures)", () => {
     expect(result).toEqual({ success: false, error: "This job is no longer available to save." });
   });
 
+  it("refuses to save a soft-deleted job", async () => {
+    const result = await saveJob(candidateA.userId, deletedJobId);
+    expect(result).toEqual({ success: false, error: "This job is no longer available to save." });
+    expect(await isJobSaved(candidateA.candidateProfileId, deletedJobId)).toBe(false);
+  });
+
   it("fails safely (no throw) when the account has no candidate profile yet", async () => {
     const noProfileUser = await prisma.user.create({
       data: {
@@ -115,6 +129,23 @@ describe("Saved jobs (real dev database, temporary fixtures)", () => {
     // touch A's real saved row.
     await unsaveJob(candidateB.userId, activeJobId);
     expect(await isJobSaved(candidateA.candidateProfileId, activeJobId)).toBe(true);
+  });
+
+  it("authorization: saveJob always resolves the candidate profile from the given userId, never a foreign one — candidate B saving the same job creates B's OWN row, not a duplicate of A's", async () => {
+    // Both saveJob and unsaveJob take only (userId, jobId) — there is no
+    // candidateProfileId parameter anywhere in either signature for a
+    // caller to supply, so the profile written to is always whatever
+    // getCandidateProfile(userId) resolves to for THAT userId.
+    const result = await saveJob(candidateB.userId, activeJobId);
+    expect(result).toEqual({ success: true });
+
+    expect(await isJobSaved(candidateB.candidateProfileId, activeJobId)).toBe(true);
+    expect(await isJobSaved(candidateA.candidateProfileId, activeJobId)).toBe(true);
+
+    const rowCount = await prisma.savedJob.count({ where: { jobId: activeJobId } });
+    expect(rowCount).toBe(2); // one row per candidate, never merged or redirected
+
+    await unsaveJob(candidateB.userId, activeJobId);
   });
 
   it("getSavedJobs excludes pending/expired jobs even if somehow saved, and lists only public-visible ones", async () => {
