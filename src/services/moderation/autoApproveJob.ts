@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { LISTING_DURATION_DAYS } from "@/constants/jobLifecycle";
 
@@ -34,6 +35,16 @@ export async function autoApproveJob(jobId: string): Promise<AutoApproveResult> 
   if (result.count === 0) {
     return { success: false, reason: "not_eligible" };
   }
+
+  // Same fix as the human-admin path (src/services/admin/moderateJob.ts's
+  // approveJob) and for the same reason: /jobs and / are fully static
+  // and would otherwise keep showing this job as absent until the next
+  // deployment. Only runs after result.count confirms this specific call
+  // actually won the race and changed the row — never before the update
+  // succeeds. The country listing and job-detail page need no
+  // revalidation here either, for the same reason documented there.
+  revalidatePath("/jobs");
+  revalidatePath("/");
 
   return { success: true };
 }

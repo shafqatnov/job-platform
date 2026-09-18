@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { LISTING_DURATION_DAYS } from "@/constants/jobLifecycle";
 
@@ -41,6 +42,20 @@ export async function approveJob(adminUserId: string, jobId: string): Promise<Mo
         data: { adminUserId, targetJobId: jobId, action: "approve" },
       }),
     ]);
+
+    // Only after the transaction has actually committed: this job is now
+    // publicly visible, but /jobs and / are fully static (no dynamic
+    // API/segment forces server rendering, per their build output) and
+    // are otherwise only regenerated on the next deployment. Without
+    // this, a newly-approved job would be correctly stored as active yet
+    // stay invisible on both pages until a redeploy. The country-specific
+    // listing (/[country]/jobs) and job-detail page
+    // (/[country]/jobs/[slug]) are NOT revalidated here because they are
+    // already server-rendered on every request (their dynamic route
+    // segment has no generateStaticParams, so Next.js never prerenders
+    // them) — they already reflect this change with no action needed.
+    revalidatePath("/jobs");
+    revalidatePath("/");
 
     return { success: true };
   } catch (error) {

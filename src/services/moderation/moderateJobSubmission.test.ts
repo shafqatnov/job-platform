@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { moderateJobSubmission } from "@/services/moderation/moderateJobSubmission";
 import { unavailableAiProvider } from "@/services/ai/unavailableAiProvider";
@@ -9,6 +9,15 @@ import {
   createTestJob,
   type ModerationTestFixtures,
 } from "@/test-utils/moderationFixtures";
+
+// A successful auto-approval now calls revalidatePath (see
+// src/services/moderation/autoApproveJob.ts), which requires an active
+// Next.js request/render context to run. These tests call the pipeline
+// directly in a bare Node process, so revalidatePath is mocked here —
+// its own behavior is covered separately in autoApproveJob.test.ts.
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+}));
 
 describe("moderateJobSubmission (real dev database, temporary fixtures, mock AI provider)", () => {
   let fixtures: ModerationTestFixtures;

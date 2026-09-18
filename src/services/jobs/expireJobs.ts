@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
 export type ExpireJobsResult = {
@@ -36,6 +37,19 @@ export async function expireDueJobs(): Promise<ExpireJobsResult> {
     },
     data: { status: "expired" },
   });
+
+  // Same stale-static-page issue as approval, in reverse: /jobs and /
+  // are fully static and would otherwise keep showing an expired job as
+  // active until the next deployment. Only when at least one row
+  // actually changed — an empty run has nothing to invalidate. The
+  // country listing and per-job detail page need no revalidation: both
+  // are already server-rendered on every request (no
+  // generateStaticParams for their dynamic segments), so they already
+  // reflect this the moment it happens, with no per-job data needed.
+  if (result.count > 0) {
+    revalidatePath("/jobs");
+    revalidatePath("/");
+  }
 
   return { expiredCount: result.count };
 }
