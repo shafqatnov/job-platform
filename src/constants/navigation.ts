@@ -32,7 +32,7 @@ export const FOOTER_LINK_GROUPS: FooterLinkGroup[] = [
     title: "For Candidates",
     links: [
       { label: "Find Jobs", href: "/jobs" },
-      { label: "Create a Profile", href: "/candidates" },
+      { label: "Create a Profile", href: "/sign-up" },
     ],
   },
   {
