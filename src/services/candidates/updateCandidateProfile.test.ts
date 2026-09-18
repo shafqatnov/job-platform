@@ -101,6 +101,63 @@ describe("updateCandidateProfile (real dev database, temporary fixtures)", () =>
     expect(after?.fullName).toBe(before?.fullName);
   });
 
+  it("rejects a city that does not belong to the selected country and makes no change", async () => {
+    const otherCountry = await prisma.country.findFirst({
+      where: { id: { not: fixtureA.countryId } },
+      select: { id: true },
+    });
+    const otherCity = otherCountry
+      ? await prisma.city.findFirst({ where: { countryId: otherCountry.id }, select: { slug: true } })
+      : null;
+    if (!otherCity) {
+      throw new Error("This test needs a second Country with at least one City already in the database.");
+    }
+
+    const before = await getCandidateProfile(fixtureA.userId);
+    const result = await updateCandidateProfile({
+      userId: fixtureA.userId,
+      fullName: "Should Not Save Either",
+      countrySlug, // fixtureA's own country
+      citySlug: otherCity.slug, // belongs to a DIFFERENT country
+      headline: "",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      fieldErrors: { city: "Please select a city that belongs to the selected country." },
+    });
+    const after = await getCandidateProfile(fixtureA.userId);
+    expect(after?.fullName).toBe(before?.fullName);
+  });
+
+  it("ownership cannot be changed — a client-supplied candidateProfileId is not part of the input type and cannot redirect the update to a different profile", async () => {
+    const beforeB = await getCandidateProfile(fixtureB.userId);
+
+    // Simulates a hostile caller attempting to smuggle in a
+    // candidateProfileId despite the type system rejecting it at
+    // compile time — updateCandidateProfile's input has no such field,
+    // and the underlying Prisma call is always
+    // `where: { userId: input.userId }`, so an extra property here can
+    // never redirect the write to fixture B's profile.
+    const maliciousInput = {
+      userId: fixtureA.userId,
+      candidateProfileId: fixtureB.candidateProfileId,
+      fullName: "Attempted Hijack",
+      countrySlug,
+      citySlug,
+      headline: "",
+    } as unknown as Parameters<typeof updateCandidateProfile>[0];
+
+    await updateCandidateProfile(maliciousInput);
+
+    const afterB = await getCandidateProfile(fixtureB.userId);
+    expect(afterB?.fullName).toBe(beforeB?.fullName);
+    expect(afterB?.id).toBe(fixtureB.candidateProfileId);
+
+    const afterA = await getCandidateProfile(fixtureA.userId);
+    expect(afterA?.fullName).toBe("Attempted Hijack");
+  });
+
   it("fails safely (no throw) when the account has no candidate profile yet", async () => {
     const noProfileUser = await prisma.user.create({
       data: {
