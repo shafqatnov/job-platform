@@ -4,6 +4,10 @@ import type { JobListItem } from "@/features/jobs/types";
 export type GetPublicJobsOptions = {
   /** Restrict results to one country by its public URL slug (e.g. "uk"), not its ISO code. */
   countryUrlSlug?: string;
+  /** Restrict results to one category by its slug (see src/constants/categories.ts). */
+  categorySlug?: string;
+  /** Case-insensitive substring match against title or description. */
+  keywords?: string;
 };
 
 const PUBLIC_JOBS_PAGE_SIZE = 24;
@@ -21,19 +25,43 @@ const PUBLIC_JOBS_PAGE_SIZE = 24;
  *
  * This is the only place allowed to query Job for the public listing —
  * callers (src/features/jobs) must go through this function, never
- * import src/lib/prisma directly. No search/filter parameters beyond an
- * optional country scope are implemented here; that's out of scope for
- * this read path. Errors are intentionally not caught here: a genuine
- * database failure must propagate to the route's error boundary, not be
- * silently presented as "no jobs."
+ * import src/lib/prisma directly. Supports an optional country scope,
+ * category scope, and keyword search (title/description substring,
+ * case-insensitive) — no other filter exists because no other filterable
+ * field exists on Job today (there is no workMode/employmentType column
+ * in prisma/schema.prisma; JobFiltersBar's corresponding selects submit
+ * their values but are not applied here, since adding those would
+ * require a schema change out of scope for this read path). Errors are
+ * intentionally not caught here: a genuine database failure must
+ * propagate to the route's error boundary, not be silently presented as
+ * "no jobs."
  */
 export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise<JobListItem[]> {
+  const keywords = options.keywords?.trim();
+
   const jobs = await prisma.job.findMany({
     where: {
       status: "active",
       deletedAt: null,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      // Combined via AND rather than a second top-level OR key, which
+      // would silently overwrite the expiry check above it (a plain
+      // object literal keeps only the last `OR`) — each independent
+      // OR-condition gets its own array entry instead.
+      AND: [
+        { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+        ...(keywords
+          ? [
+              {
+                OR: [
+                  { title: { contains: keywords, mode: "insensitive" as const } },
+                  { description: { contains: keywords, mode: "insensitive" as const } },
+                ],
+              },
+            ]
+          : []),
+      ],
       ...(options.countryUrlSlug ? { country: { urlSlug: options.countryUrlSlug } } : {}),
+      ...(options.categorySlug ? { category: { slug: options.categorySlug } } : {}),
     },
     select: {
       id: true,

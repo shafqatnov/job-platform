@@ -26,6 +26,25 @@ export const metadata: Metadata = {
   },
 };
 
-export default function JobsPage() {
-  return <JobsListingView />;
+/** A searchParams entry can arrive as a string, an array (repeated key), or absent. */
+function firstValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function JobsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+
+  return (
+    <JobsListingView
+      filters={{
+        keywords: firstValue(params.q),
+        countryCode: firstValue(params.country),
+        categorySlug: firstValue(params.category),
+      }}
+    />
+  );
 }

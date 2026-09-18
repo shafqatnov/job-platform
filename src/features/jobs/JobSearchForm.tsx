@@ -8,15 +8,18 @@ import { COUNTRIES } from "@/constants/countries";
 import { JOB_CATEGORIES } from "@/constants/categories";
 
 /**
- * Visual-only job search form. Submitting only prevents a default page
- * reload — no search is performed. Kept as a single self-contained
- * component so wiring a real search service later means changing this
- * file's submit handling, not redesigning the homepage around it.
+ * Job search form. A plain HTML GET form to /jobs — submitting performs
+ * a real browser navigation with each field's value as a query
+ * parameter (?q=...&country=...&category=...), read by
+ * src/app/(public)/jobs/page.tsx and applied via getPublicJobs(). No
+ * client-side JS is needed for this; the native form submission already
+ * does the right thing.
  */
 export function JobSearchForm() {
   return (
     <form
-      onSubmit={(event) => event.preventDefault()}
+      action="/jobs"
+      method="get"
       className="grid gap-4 rounded-2xl border border-border bg-surface p-4 shadow-xl sm:p-6 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto] lg:items-end"
     >
       <Input

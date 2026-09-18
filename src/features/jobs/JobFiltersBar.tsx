@@ -11,20 +11,33 @@ import { WORK_MODES, EMPLOYMENT_TYPES } from "@/features/jobs/constants";
 export type JobFiltersBarProps = {
   /** When set, the country field is locked to this country instead of editable. */
   lockedCountry?: CountryOption;
+  /** Current keyword filter, if any — reflected back into the field after a search. */
+  defaultKeywords?: string;
+  /** Current category filter (slug), if any — reflected back into the field after a search. */
+  defaultCategorySlug?: string;
 };
 
 /**
- * Visual-only filter bar. Submitting only prevents a default page reload
- * — no filtering happens yet. The country field is disabled when the
- * page is already scoped to one country via its URL segment, since
- * changing it here would require real navigation this component doesn't
- * perform; every other field stays enabled but equally non-functional,
- * consistent with the homepage's search form.
+ * Real filter bar: a plain HTML GET form. Submitting navigates to /jobs
+ * (or, when scoped to a country, /{country}/jobs) with each enabled
+ * field's value as a query parameter, read by the corresponding page
+ * and applied via getPublicJobs(). The country field is disabled when
+ * the page is already scoped to one country via its URL segment — a
+ * disabled field is never included in a form submission, which is
+ * exactly correct here (the route segment already carries that scope).
+ *
+ * Work Mode and Employment Type remain present and still submit their
+ * values into the URL, but are NOT applied as filters: there is no
+ * workMode/employmentType column on Job in prisma/schema.prisma, and
+ * adding one is a schema change out of scope for this change. Wiring
+ * every other field is still a real, complete improvement over today's
+ * fully non-functional form.
  */
-export function JobFiltersBar({ lockedCountry }: JobFiltersBarProps) {
+export function JobFiltersBar({ lockedCountry, defaultKeywords, defaultCategorySlug }: JobFiltersBarProps) {
   return (
     <form
-      onSubmit={(event) => event.preventDefault()}
+      action={lockedCountry ? `/${lockedCountry.slug}/jobs` : "/jobs"}
+      method="get"
       className="grid gap-4 rounded-xl border border-border bg-surface p-4 shadow-md sm:grid-cols-2 sm:p-6 lg:grid-cols-3 xl:grid-cols-4"
     >
       <Input
@@ -32,6 +45,7 @@ export function JobFiltersBar({ lockedCountry }: JobFiltersBarProps) {
         name="q"
         placeholder="Job title, skill, or company"
         autoComplete="off"
+        defaultValue={defaultKeywords ?? ""}
         icon={<SearchIcon className="h-4 w-4" />}
         className="sm:col-span-2 xl:col-span-2"
       />
@@ -57,6 +71,7 @@ export function JobFiltersBar({ lockedCountry }: JobFiltersBarProps) {
         name="category"
         placeholder="Any category"
         icon={<BriefcaseIcon className="h-4 w-4" />}
+        defaultValue={defaultCategorySlug ?? ""}
         options={JOB_CATEGORIES.map((category) => ({ value: category.slug, label: category.name }))}
       />
       <Select label="Work Mode" name="workMode" placeholder="Any work mode" options={WORK_MODES} />

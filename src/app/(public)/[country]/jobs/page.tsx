@@ -43,7 +43,17 @@ export async function generateMetadata({
   };
 }
 
-export default async function CountryJobsPage({ params }: PageProps<"/[country]/jobs">) {
+/** A searchParams entry can arrive as a string, an array (repeated key), or absent. */
+function firstValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function CountryJobsPage({
+  params,
+  searchParams,
+}: PageProps<"/[country]/jobs"> & {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { country: countrySlug } = await params;
   const country = getCountryBySlug(countrySlug);
 
@@ -51,5 +61,15 @@ export default async function CountryJobsPage({ params }: PageProps<"/[country]/
     notFound();
   }
 
-  return <JobsListingView country={country} />;
+  const query = await searchParams;
+
+  return (
+    <JobsListingView
+      country={country}
+      filters={{
+        keywords: firstValue(query.q),
+        categorySlug: firstValue(query.category),
+      }}
+    />
+  );
 }

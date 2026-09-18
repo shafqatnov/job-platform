@@ -9,11 +9,24 @@ import { JobFiltersBar } from "@/features/jobs/JobFiltersBar";
 import { JobCard } from "@/features/jobs/JobCard";
 import { SORT_OPTIONS } from "@/features/jobs/constants";
 import { getPublicJobs } from "@/services/jobs/getPublicJobs";
-import type { CountryOption } from "@/constants/countries";
+import { getCountryByCode, type CountryOption } from "@/constants/countries";
+
+export type JobListingFilters = {
+  /** Raw keyword query (searchParams "q") — matched against title/description. */
+  keywords?: string;
+  /** Raw country CODE (searchParams "country", e.g. "gb") from the unscoped /jobs
+   *  filter bar — resolved to a real Country by src/constants/countries.ts. Ignored
+   *  when `country` (the route-scoped country) is already set. */
+  countryCode?: string;
+  /** Raw category slug (searchParams "category"). */
+  categorySlug?: string;
+};
 
 export type JobsListingViewProps = {
   /** Present only on the country-scoped route; absent on the global /jobs page. */
   country?: CountryOption;
+  /** Parsed from the current page's searchParams — see both jobs page.tsx files. */
+  filters?: JobListingFilters;
 };
 
 /**
@@ -25,8 +38,18 @@ export type JobsListingViewProps = {
  * as an empty result, which would misrepresent a system failure as
  * "no jobs yet."
  */
-export async function JobsListingView({ country }: JobsListingViewProps) {
-  const jobs = await getPublicJobs({ countryUrlSlug: country?.slug });
+export async function JobsListingView({ country, filters }: JobsListingViewProps) {
+  // The route-scoped country (set only on /{country}/jobs) always wins
+  // over a stray "country" query value — the filter bar's country field
+  // is disabled on that route for exactly this reason, so in practice
+  // filters?.countryCode is never set there anyway.
+  const resolvedCountry = country ?? (filters?.countryCode ? getCountryByCode(filters.countryCode) : undefined);
+
+  const jobs = await getPublicJobs({
+    countryUrlSlug: resolvedCountry?.slug,
+    categorySlug: filters?.categorySlug,
+    keywords: filters?.keywords,
+  });
 
   const heading = country ? `Jobs in ${country.name}` : "Browse All Jobs";
   const intro = country
@@ -42,7 +65,11 @@ export async function JobsListingView({ country }: JobsListingViewProps) {
         <p className="text-muted-foreground">{intro}</p>
       </div>
 
-      <JobFiltersBar lockedCountry={country} />
+      <JobFiltersBar
+        lockedCountry={country}
+        defaultKeywords={filters?.keywords}
+        defaultCategorySlug={filters?.categorySlug}
+      />
 
       <div className="my-6 flex justify-center">
         <AdSlot size="leaderboard" />
