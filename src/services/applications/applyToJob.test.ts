@@ -141,4 +141,134 @@ describe("applyToJob duplicate prevention (real dev database, temporary fixtures
     });
     expect(application).toBeNull();
   });
+
+  it("accepts a cover note at exactly the maximum length", async () => {
+    const job = await createTestJob(employerFixtures, {
+      title: `[APPLY TEST] Cover Note Max Length Job ${crypto.randomUUID().slice(0, 8)}`,
+      status: "active",
+      applicationMethod: "on_platform",
+    });
+
+    const result = await applyToJob({
+      userId: candidateUserId,
+      jobId: job.id,
+      coverNote: "x".repeat(2000),
+    });
+
+    expect(result.success).toBe(true);
+    const application = await prisma.application.findFirstOrThrow({
+      where: { candidateProfileId, jobId: job.id },
+      select: { coverNote: true },
+    });
+    expect(application.coverNote).toHaveLength(2000);
+  });
+
+  it("treats a whitespace-only cover note the same as no cover note — stored as null", async () => {
+    const job = await createTestJob(employerFixtures, {
+      title: `[APPLY TEST] Cover Note Blank Job ${crypto.randomUUID().slice(0, 8)}`,
+      status: "active",
+      applicationMethod: "on_platform",
+    });
+
+    const result = await applyToJob({ userId: candidateUserId, jobId: job.id, coverNote: "   " });
+
+    expect(result.success).toBe(true);
+    const application = await prisma.application.findFirstOrThrow({
+      where: { candidateProfileId, jobId: job.id },
+      select: { coverNote: true },
+    });
+    expect(application.coverNote).toBeNull();
+  });
+
+  it("authorization: the created application always belongs to the caller's own candidate profile, derived from userId — a client-supplied candidateProfileId cannot redirect ownership", async () => {
+    const otherCandidateUser = await prisma.user.create({
+      data: {
+        email: `apply-test-other-${crypto.randomUUID()}@example.invalid`,
+        name: "[APPLY TEST] Other Candidate",
+        role: "candidate",
+        status: "active",
+        emailVerified: false,
+      },
+      select: { id: true },
+    });
+    const otherCandidateProfile = await prisma.candidateProfile.create({
+      data: {
+        userId: otherCandidateUser.id,
+        countryId: employerFixtures.countryId,
+        cityId: employerFixtures.cityId,
+        fullName: "Other Apply Test Candidate",
+      },
+      select: { id: true },
+    });
+
+    const job = await createTestJob(employerFixtures, {
+      title: `[APPLY TEST] Ownership Job ${crypto.randomUUID().slice(0, 8)}`,
+      status: "active",
+      applicationMethod: "on_platform",
+    });
+
+    try {
+      // applyToJob's input has no candidateProfileId field — the type
+      // system already rejects one — but this simulates a hostile
+      // caller smuggling one in anyway. The service only ever derives
+      // ownership from input.userId via getCandidateProfile, so the
+      // resulting application must belong to otherCandidateUser's own
+      // profile, never candidateProfileId (fixture A's profile).
+      const maliciousInput = {
+        userId: otherCandidateUser.id,
+        candidateProfileId,
+        jobId: job.id,
+      } as unknown as Parameters<typeof applyToJob>[0];
+
+      const result = await applyToJob(maliciousInput);
+      expect(result.success).toBe(true);
+
+      const application = await prisma.application.findFirstOrThrow({
+        where: { jobId: job.id },
+        select: { candidateProfileId: true },
+      });
+      expect(application.candidateProfileId).toBe(otherCandidateProfile.id);
+      expect(application.candidateProfileId).not.toBe(candidateProfileId);
+    } finally {
+      await prisma.application.deleteMany({ where: { candidateProfileId: otherCandidateProfile.id } });
+      await prisma.candidateProfile.deleteMany({ where: { userId: otherCandidateUser.id } });
+      await prisma.user.deleteMany({ where: { id: otherCandidateUser.id } });
+    }
+  });
+
+  it("job eligibility checks remain unchanged: pending, expired, soft-deleted, and external-application-method jobs all reject applications", async () => {
+    const pendingJob = await createTestJob(employerFixtures, {
+      title: `[APPLY TEST] Pending Job ${crypto.randomUUID().slice(0, 8)}`,
+      status: "pending_review",
+    });
+    const expiredJob = await createTestJob(employerFixtures, {
+      title: `[APPLY TEST] Expired Job ${crypto.randomUUID().slice(0, 8)}`,
+      status: "active",
+      applicationMethod: "on_platform",
+      expiresAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
+    const deletedJob = await createTestJob(employerFixtures, {
+      title: `[APPLY TEST] Deleted Job ${crypto.randomUUID().slice(0, 8)}`,
+      status: "active",
+      applicationMethod: "on_platform",
+      deletedAt: new Date(),
+    });
+    const externalJob = await createTestJob(employerFixtures, {
+      title: `[APPLY TEST] External Job ${crypto.randomUUID().slice(0, 8)}`,
+      status: "active",
+      applicationMethod: "external_url",
+      externalApplicationUrl: "https://example.invalid/apply",
+    });
+
+    const expectedError = { success: false, error: "This job is no longer accepting applications." };
+    expect(await applyToJob({ userId: candidateUserId, jobId: pendingJob.id })).toEqual(expectedError);
+    expect(await applyToJob({ userId: candidateUserId, jobId: expiredJob.id })).toEqual(expectedError);
+    expect(await applyToJob({ userId: candidateUserId, jobId: deletedJob.id })).toEqual(expectedError);
+    expect(await applyToJob({ userId: candidateUserId, jobId: externalJob.id })).toEqual(expectedError);
+
+    const applicationCount = await prisma.application.count({
+      where: { jobId: { in: [pendingJob.id, expiredJob.id, deletedJob.id, externalJob.id] } },
+    });
+    expect(applicationCount).toBe(0);
+  });
 });
