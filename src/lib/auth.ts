@@ -2,7 +2,8 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@/lib/prisma";
 import { resolveSignUpRole } from "@/services/auth/resolveSignUpRole";
-import { deliverAuthEmail } from "@/lib/email/authEmailPlaceholder";
+import { sendTransactionalEmail } from "@/lib/email/brevoClient";
+import { buildPasswordResetEmail, buildVerificationEmail } from "@/lib/email/authEmailTemplates";
 
 /**
  * Better Auth server configuration — Phase 1 scope only, per
@@ -32,15 +33,21 @@ export const auth = betterAuth({
     // defaults (8/128) — not an invented policy; the existing sign-up
     // form's minLength={8} already matches this.
     //
-    // No real email provider is configured for this project yet (see
-    // src/lib/email/authEmailPlaceholder.ts). Better Auth requires this
-    // callback to be set for /request-password-reset to work at all —
-    // leaving it unset makes the endpoint throw, not "do nothing safely".
-    // This callback never fabricates delivery; it only logs safe
-    // metadata. The url/token are intentionally never logged or printed
-    // anywhere.
-    sendResetPassword: async ({ user }) => {
-      await deliverAuthEmail({ event: "password_reset_requested", userId: user.id });
+    // Real delivery via Brevo (src/lib/email/brevoClient.ts). Better
+    // Auth requires this callback to be set for /request-password-reset
+    // to work at all — leaving it unset makes the endpoint throw, not
+    // "do nothing safely". `url` is passed straight to the email body
+    // and is never logged or printed anywhere; a Brevo failure here is
+    // thrown, not swallowed, so it reaches Better Auth's own background-
+    // task error log — but per Better Auth's own runInBackgroundOrAwait
+    // (this callback is invoked through it), that failure is caught
+    // there and never changes this endpoint's response to the client,
+    // which was already a generic, enumeration-safe message regardless
+    // of delivery outcome before this change — not something introduced
+    // here.
+    sendResetPassword: async ({ user, url }) => {
+      const { subject, htmlContent } = buildPasswordResetEmail({ name: user.name, url });
+      await sendTransactionalEmail({ to: { email: user.email, name: user.name }, subject, htmlContent });
     },
     // A resolved reset necessarily proves the requester controlled the
     // account (via the emailed link) — revoking any other active
@@ -58,8 +65,9 @@ export const auth = betterAuth({
     // this task forbids. This wires the real Better Auth mechanism
     // (Verification table, real token) without changing sign-up/sign-in
     // behavior at all.
-    sendVerificationEmail: async ({ user }) => {
-      await deliverAuthEmail({ event: "verification_email_requested", userId: user.id });
+    sendVerificationEmail: async ({ user, url }) => {
+      const { subject, htmlContent } = buildVerificationEmail({ name: user.name, url });
+      await sendTransactionalEmail({ to: { email: user.email, name: user.name }, subject, htmlContent });
     },
   },
   user: {
