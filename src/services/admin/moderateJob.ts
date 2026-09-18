@@ -1,9 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { LISTING_DURATION_DAYS } from "@/constants/jobLifecycle";
 
 export type ModerateJobResult = { success: true } | { success: false; error: string };
-
-// docs/18-job-lifecycle.md's recommended default listing duration.
-const LISTING_DURATION_DAYS = 30;
 
 /**
  * Approves a pending job: status -> active, postedAt set to now,

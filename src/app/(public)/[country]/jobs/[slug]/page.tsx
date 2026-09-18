@@ -4,6 +4,11 @@ import { getCountryBySlug } from "@/constants/countries";
 import { getPublicJobBySlug } from "@/services/jobs/getPublicJobBySlug";
 import { getPublicJobs } from "@/services/jobs/getPublicJobs";
 import { JobDetailView } from "@/features/jobs/JobDetailView";
+import { getSessionUser } from "@/services/auth/getSessionUser";
+import { getCandidateProfile } from "@/services/candidates/getCandidateProfile";
+import { hasApplied } from "@/services/applications/hasApplied";
+import type { ApplyState } from "@/features/jobs/ApplyButton";
+import { getConfiguredSiteUrl } from "@/lib/siteUrl";
 
 export async function generateMetadata({
   params,
@@ -25,9 +30,29 @@ export async function generateMetadata({
     return { title: "Job" };
   }
 
+  const title = `${job.title} at ${job.companyName}`;
+  const description = `${job.title} at ${job.companyName} — a ${job.categoryName} role in ${job.city}, ${job.countryName}.`;
+  const siteUrl = getConfiguredSiteUrl();
+  // Only ever built from a job that has already been confirmed to
+  // exist and be publicly visible above — never an invalid/guessed job
+  // or country.
+  const path = `/${country.slug}/jobs/${job.slug}`;
+
   return {
-    title: `${job.title} at ${job.companyName}`,
-    description: `${job.title} at ${job.companyName} — a ${job.categoryName} role in ${job.city}, ${job.countryName}.`,
+    title,
+    description,
+    ...(siteUrl ? { alternates: { canonical: `${siteUrl}${path}` } } : {}),
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      ...(siteUrl ? { url: `${siteUrl}${path}` } : {}),
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
   };
 }
 
@@ -49,6 +74,24 @@ export default async function JobDetailPage({
 
   const countryJobs = await getPublicJobs({ countryUrlSlug: country.slug });
   const relatedJobs = countryJobs.filter((otherJob) => otherJob.slug !== job.slug).slice(0, 3);
+
+  const currentPath = `/${country.slug}/jobs/${slug}`;
+  const createProfileHref = `/candidate/profile/create?redirectTo=${encodeURIComponent(currentPath)}`;
+
+  const user = await getSessionUser();
+  let applyState: ApplyState;
+  if (!user) {
+    applyState = "signed_out";
+  } else if (user.role !== "candidate") {
+    applyState = "not_candidate";
+  } else {
+    const candidateProfile = await getCandidateProfile(user.id);
+    if (!candidateProfile) {
+      applyState = "no_profile";
+    } else {
+      applyState = (await hasApplied(candidateProfile.id, job.id)) ? "already_applied" : "can_apply";
+    }
+  }
 
   // JobPosting JSON-LD, populated only from fields the schema actually
   // has and can vouch for as accurate:
@@ -96,7 +139,12 @@ export default async function JobDetailPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jobPostingJsonLdString }}
       />
-      <JobDetailView job={job} relatedJobs={relatedJobs} />
+      <JobDetailView
+        job={job}
+        relatedJobs={relatedJobs}
+        applyState={applyState}
+        createProfileHref={createProfileHref}
+      />
     </>
   );
 }

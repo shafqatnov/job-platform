@@ -4,9 +4,27 @@ import { Section } from "@/components/Section";
 import { Card } from "@/components/Card";
 import { SignInForm } from "@/features/auth/SignInForm";
 
+const TITLE = "Sign In";
+const DESCRIPTION = "Sign in to your Job Platform account.";
+
 export const metadata: Metadata = {
-  title: "Sign In",
-  description: "Sign in to your Job Platform account.",
+  title: TITLE,
+  description: DESCRIPTION,
+  // A plain utility form with no unique content per visit — not a
+  // useful search result on its own, but still a real, crawlable page
+  // (so links from it are still followed), unlike the authenticated
+  // dashboards which are disallowed outright in robots.ts.
+  robots: { index: false, follow: true },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function SignInPage() {
@@ -22,6 +40,11 @@ export default function SignInPage() {
         <Card padding="lg">
           <SignInForm />
         </Card>
+        <p className="text-center text-sm text-muted-foreground">
+          <Link href="/forgot-password" className="font-medium text-brand-600 hover:text-brand-700">
+            Forgot your password?
+          </Link>
+        </p>
         <p className="text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
           <Link href="/sign-up" className="font-medium text-brand-600 hover:text-brand-700">

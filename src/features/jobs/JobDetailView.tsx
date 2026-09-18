@@ -5,6 +5,7 @@ import { Badge } from "@/components/Badge";
 import { AdSlot } from "@/components/AdSlot";
 import { getButtonClassName } from "@/components/Button";
 import { JobCard } from "@/features/jobs/JobCard";
+import { ApplyButton, type ApplyState } from "@/features/jobs/ApplyButton";
 import type { PublicJobDetail } from "@/services/jobs/getPublicJobBySlug";
 import type { JobListItem } from "@/features/jobs/types";
 
@@ -12,6 +13,9 @@ export type JobDetailViewProps = {
   job: PublicJobDetail;
   /** Other publishable jobs in the same country, current job already excluded. */
   relatedJobs: JobListItem[];
+  /** Only meaningful when applicationMethod is on_platform — see ApplyButton. */
+  applyState: ApplyState;
+  createProfileHref: string;
 };
 
 function formatDate(iso: string): string {
@@ -29,7 +33,7 @@ function formatSalary(job: PublicJobDetail): string | undefined {
   return `${job.currencyCode} ${job.salaryMin.toLocaleString()}–${job.salaryMax.toLocaleString()}`;
 }
 
-export function JobDetailView({ job, relatedJobs }: JobDetailViewProps) {
+export function JobDetailView({ job, relatedJobs, applyState, createProfileHref }: JobDetailViewProps) {
   const salary = formatSalary(job);
   const hasExternalUrl = job.applicationMethod === "external_url" && Boolean(job.externalApplicationUrl);
 
@@ -86,19 +90,7 @@ export function JobDetailView({ job, relatedJobs }: JobDetailViewProps) {
                   Apply on company site
                 </a>
               ) : (
-                <>
-                  <button
-                    type="button"
-                    disabled
-                    aria-describedby="apply-unavailable"
-                    className={getButtonClassName({ fullWidth: true, className: "cursor-not-allowed" })}
-                  >
-                    Apply
-                  </button>
-                  <p id="apply-unavailable" className="text-sm text-muted-foreground">
-                    On-platform applications aren&apos;t available yet. Check back soon.
-                  </p>
-                </>
+                <ApplyButton jobId={job.id} applyState={applyState} createProfileHref={createProfileHref} />
               )}
             </Card>
           </aside>

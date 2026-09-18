@@ -9,6 +9,7 @@ export type EmployerJobRow = {
   createdAt: string;
   countrySlug: string;
   slug: string;
+  applicationCount: number;
 };
 
 /**
@@ -31,6 +32,7 @@ export async function getEmployerJobs(companyId: string): Promise<EmployerJobRow
       createdAt: true,
       slug: true,
       country: { select: { urlSlug: true } },
+      _count: { select: { applications: { where: { deletedAt: null } } } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -43,5 +45,6 @@ export async function getEmployerJobs(companyId: string): Promise<EmployerJobRow
     createdAt: job.createdAt.toISOString(),
     countrySlug: job.country.urlSlug,
     slug: job.slug,
+    applicationCount: job._count.applications,
   }));
 }

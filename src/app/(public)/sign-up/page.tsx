@@ -4,9 +4,25 @@ import { Section } from "@/components/Section";
 import { Card } from "@/components/Card";
 import { SignUpForm } from "@/features/auth/SignUpForm";
 
+const TITLE = "Create Account";
+const DESCRIPTION = "Create a candidate or employer account on Job Platform.";
+
 export const metadata: Metadata = {
-  title: "Create Account",
-  description: "Create a candidate or employer account on Job Platform.",
+  title: TITLE,
+  description: DESCRIPTION,
+  // See src/app/(public)/sign-in/page.tsx for why this is noindex but
+  // still followable rather than disallowed outright.
+  robots: { index: false, follow: true },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function SignUpPage() {

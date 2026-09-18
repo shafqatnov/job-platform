@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getCountryBySlug } from "@/constants/countries";
 import { JobsListingView } from "@/features/jobs/JobsListingView";
+import { getConfiguredSiteUrl } from "@/lib/siteUrl";
 
 export async function generateMetadata({
   params,
@@ -17,9 +18,28 @@ export async function generateMetadata({
     return { title: "Jobs" };
   }
 
+  const title = `Jobs in ${country.name}`;
+  const description = `Browse open roles in ${country.name} across multiple industries. Filter by category, location, and work type to find your next opportunity.`;
+  const siteUrl = getConfiguredSiteUrl();
+  // Only ever built from a country slug that has already resolved to a
+  // real, known country above — never an invalid/guessed one.
+  const path = `/${country.slug}/jobs`;
+
   return {
-    title: `Jobs in ${country.name}`,
-    description: `Browse open roles in ${country.name} across multiple industries. Filter by category, location, and work type to find your next opportunity.`,
+    title,
+    description,
+    ...(siteUrl ? { alternates: { canonical: `${siteUrl}${path}` } } : {}),
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      ...(siteUrl ? { url: `${siteUrl}${path}` } : {}),
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
   };
 }
 

@@ -13,10 +13,11 @@ const PUBLIC_JOBS_PAGE_SIZE = 24;
  *
  * "Publishable" means status = active AND not past its expiry date, per
  * docs/18-job-lifecycle.md. Status alone isn't enough: the automated
- * active -> expired transition (docs/09-automation-architecture.md)
- * doesn't exist yet, so a row can still read status = active after its
- * expiresAt has passed — the expiresAt check here enforces the
- * documented lifecycle intent defensively until that worker exists.
+ * active -> expired transition (src/services/jobs/expireJobs.ts) runs on
+ * its own schedule, not synchronously with this read, so a row can
+ * still briefly read status = active after its expiresAt has passed —
+ * the expiresAt check here stays as a defensive backstop against that
+ * window, not a substitute for the transition itself.
  *
  * This is the only place allowed to query Job for the public listing —
  * callers (src/features/jobs) must go through this function, never

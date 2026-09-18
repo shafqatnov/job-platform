@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import type { ApplicationMethod, JobStatus } from "@/generated/prisma/enums";
+import type { ApplicationMethod, JobSource, JobStatus } from "@/generated/prisma/enums";
 
 export type AdminJobDetail = {
   id: string;
   title: string;
   description: string;
   slug: string;
+  source: JobSource;
   companyName: string;
   countryName: string;
   countrySlug: string;
@@ -38,6 +39,7 @@ export async function getJobForAdmin(jobId: string): Promise<AdminJobDetail | nu
       title: true,
       description: true,
       slug: true,
+      source: true,
       status: true,
       rejectionReason: true,
       applicationMethod: true,
@@ -64,6 +66,7 @@ export async function getJobForAdmin(jobId: string): Promise<AdminJobDetail | nu
     title: job.title,
     description: job.description,
     slug: job.slug,
+    source: job.source,
     companyName: job.company.name,
     countryName: job.country.name,
     countrySlug: job.country.urlSlug,

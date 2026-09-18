@@ -67,6 +67,12 @@ export default async function EmployerDashboardPage({
                 {job.status === "rejected" && job.rejectionReason ? (
                   <p className="text-sm text-muted-foreground">Reason: {job.rejectionReason}</p>
                 ) : null}
+                <Link
+                  href={`/employer/jobs/${job.id}/applications`}
+                  className="text-sm font-medium text-brand-600 hover:text-brand-700"
+                >
+                  {job.applicationCount} {job.applicationCount === 1 ? "application" : "applications"}
+                </Link>
               </li>
             ))}
           </ul>

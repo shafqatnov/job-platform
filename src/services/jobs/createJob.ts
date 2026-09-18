@@ -43,7 +43,8 @@ const MAX_TITLE_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 10000;
 const MAX_SLUG_ATTEMPTS = 50;
 
-function isSafeExternalUrl(value: string): boolean {
+/** Exported for reuse by the moderation pipeline's deterministic gates — the same rule, not a duplicate one. */
+export function isSafeExternalUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === "http:" || url.protocol === "https:";

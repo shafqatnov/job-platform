@@ -9,11 +9,29 @@ import { PopularCategories } from "@/features/jobs/PopularCategories";
 import { PopularCountries } from "@/features/jobs/PopularCountries";
 import { EmployerCta } from "@/features/employers/EmployerCta";
 import { getPublicJobs } from "@/services/jobs/getPublicJobs";
+import { getConfiguredSiteUrl } from "@/lib/siteUrl";
+
+const TITLE = "Find Jobs Worldwide";
+const DESCRIPTION =
+  "Search jobs across multiple countries and industries, and apply directly with verified employers on a global job search platform built for candidates and employers.";
+
+const siteUrl = getConfiguredSiteUrl();
 
 export const metadata: Metadata = {
-  title: "Find Jobs Worldwide",
-  description:
-    "Search jobs across multiple countries and industries, and apply directly with verified employers on a global job search platform built for candidates and employers.",
+  title: TITLE,
+  description: DESCRIPTION,
+  ...(siteUrl ? { alternates: { canonical: siteUrl } } : {}),
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    type: "website",
+    ...(siteUrl ? { url: siteUrl } : {}),
+  },
+  twitter: {
+    card: "summary",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default async function HomePage() {
