@@ -32,7 +32,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             >
               J
             </span>
-            <span className="text-lg font-semibold tracking-tight text-foreground">Job Platform</span>
+            <span className="text-lg font-semibold tracking-tight text-foreground">Jobnura</span>
           </Link>
           <div className="flex items-center gap-3">
             <span className="hidden text-sm text-muted-foreground sm:inline">{user.name}</span>

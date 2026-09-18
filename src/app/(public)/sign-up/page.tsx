@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { SignUpForm } from "@/features/auth/SignUpForm";
 
 const TITLE = "Create Account";
-const DESCRIPTION = "Create a candidate or employer account on Job Platform.";
+const DESCRIPTION = "Create a candidate or employer account on Jobnura.";
 
 export const metadata: Metadata = {
   title: TITLE,

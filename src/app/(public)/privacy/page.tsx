@@ -6,7 +6,7 @@ import { PolicySection } from "@/features/legal/PolicySection";
 import { getConfiguredSiteUrl } from "@/lib/siteUrl";
 
 const TITLE = "Privacy Policy";
-const DESCRIPTION = "How the Job Platform collects, uses, and protects account, employer, and candidate data.";
+const DESCRIPTION = "How Jobnura collects, uses, and protects account, employer, and candidate data.";
 const LAST_UPDATED = "17 September 2026";
 const siteUrl = getConfiguredSiteUrl();
 const path = "/privacy";
@@ -16,14 +16,14 @@ export const metadata: Metadata = {
   description: DESCRIPTION,
   ...(siteUrl ? { alternates: { canonical: `${siteUrl}${path}` } } : {}),
   openGraph: {
-    title: `${TITLE} | Job Platform`,
+    title: `${TITLE} | Jobnura`,
     description: DESCRIPTION,
     type: "website",
     ...(siteUrl ? { url: `${siteUrl}${path}` } : {}),
   },
   twitter: {
     card: "summary",
-    title: `${TITLE} | Job Platform`,
+    title: `${TITLE} | Jobnura`,
     description: DESCRIPTION,
   },
 };

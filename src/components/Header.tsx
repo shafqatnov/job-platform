@@ -20,7 +20,7 @@ export function Header() {
           >
             J
           </span>
-          <span className="text-lg font-semibold tracking-tight text-foreground">Job Platform</span>
+          <span className="text-lg font-semibold tracking-tight text-foreground">Jobnura</span>
         </Link>
 
         <div className="hidden items-center gap-8 md:flex">

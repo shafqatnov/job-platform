@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Job Platform",
-    template: "%s | Job Platform",
+    default: "Jobnura",
+    template: "%s | Jobnura",
   },
   description: "A global job search platform connecting candidates and employers.",
 };

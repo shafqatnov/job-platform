@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { ForgotPasswordForm } from "@/features/auth/ForgotPasswordForm";
 
 const TITLE = "Forgot Password";
-const DESCRIPTION = "Request a password reset for your Job Platform account.";
+const DESCRIPTION = "Request a password reset for your Jobnura account.";
 
 export const metadata: Metadata = {
   title: TITLE,

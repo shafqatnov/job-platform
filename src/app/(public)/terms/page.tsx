@@ -5,7 +5,7 @@ import { PolicySection } from "@/features/legal/PolicySection";
 import { getConfiguredSiteUrl } from "@/lib/siteUrl";
 
 const TITLE = "Terms of Service";
-const DESCRIPTION = "The terms governing use of the Job Platform by candidates, employers, and administrators.";
+const DESCRIPTION = "The terms governing use of Jobnura by candidates, employers, and administrators.";
 const LAST_UPDATED = "17 September 2026";
 const siteUrl = getConfiguredSiteUrl();
 const path = "/terms";
@@ -15,14 +15,14 @@ export const metadata: Metadata = {
   description: DESCRIPTION,
   ...(siteUrl ? { alternates: { canonical: `${siteUrl}${path}` } } : {}),
   openGraph: {
-    title: `${TITLE} | Job Platform`,
+    title: `${TITLE} | Jobnura`,
     description: DESCRIPTION,
     type: "website",
     ...(siteUrl ? { url: `${siteUrl}${path}` } : {}),
   },
   twitter: {
     card: "summary",
-    title: `${TITLE} | Job Platform`,
+    title: `${TITLE} | Jobnura`,
     description: DESCRIPTION,
   },
 };

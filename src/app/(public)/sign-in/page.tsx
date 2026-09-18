@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { SignInForm } from "@/features/auth/SignInForm";
 
 const TITLE = "Sign In";
-const DESCRIPTION = "Sign in to your Job Platform account.";
+const DESCRIPTION = "Sign in to your Jobnura account.";
 
 export const metadata: Metadata = {
   title: TITLE,

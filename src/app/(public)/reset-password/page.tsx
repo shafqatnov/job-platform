@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { ResetPasswordForm } from "@/features/auth/ResetPasswordForm";
 
 const TITLE = "Reset Password";
-const DESCRIPTION = "Set a new password for your Job Platform account.";
+const DESCRIPTION = "Set a new password for your Jobnura account.";
 
 export const metadata: Metadata = {
   title: TITLE,

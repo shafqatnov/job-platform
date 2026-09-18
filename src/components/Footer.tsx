@@ -17,7 +17,7 @@ export function Footer() {
             >
               J
             </span>
-            <span className="text-lg font-semibold tracking-tight text-foreground">Job Platform</span>
+            <span className="text-lg font-semibold tracking-tight text-foreground">Jobnura</span>
           </Link>
           <p className="max-w-xs text-sm text-muted-foreground">
             Connecting candidates and employers across multiple countries and industries.
@@ -29,7 +29,7 @@ export function Footer() {
       </Container>
       <div className="border-t border-border">
         <Container className="flex flex-col gap-2 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <p>© {year} Job Platform. All rights reserved.</p>
+          <p>© {year} Jobnura. All rights reserved.</p>
         </Container>
       </div>
     </footer>

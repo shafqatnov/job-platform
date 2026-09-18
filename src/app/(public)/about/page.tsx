@@ -16,14 +16,14 @@ export const metadata: Metadata = {
   description: DESCRIPTION,
   ...(siteUrl ? { alternates: { canonical: `${siteUrl}${path}` } } : {}),
   openGraph: {
-    title: `${TITLE} | Job Platform`,
+    title: `${TITLE} | Jobnura`,
     description: DESCRIPTION,
     type: "website",
     ...(siteUrl ? { url: `${siteUrl}${path}` } : {}),
   },
   twitter: {
     card: "summary",
-    title: `${TITLE} | Job Platform`,
+    title: `${TITLE} | Jobnura`,
     description: DESCRIPTION,
   },
 };

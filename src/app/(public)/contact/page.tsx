@@ -5,7 +5,7 @@ import { Badge } from "@/components/Badge";
 import { getConfiguredSiteUrl } from "@/lib/siteUrl";
 
 const TITLE = "Contact";
-const DESCRIPTION = "How to reach the Job Platform team for business, support, sales, and technical inquiries.";
+const DESCRIPTION = "How to reach the Jobnura team for business, support, sales, and technical inquiries.";
 const siteUrl = getConfiguredSiteUrl();
 const path = "/contact";
 
@@ -14,14 +14,14 @@ export const metadata: Metadata = {
   description: DESCRIPTION,
   ...(siteUrl ? { alternates: { canonical: `${siteUrl}${path}` } } : {}),
   openGraph: {
-    title: `${TITLE} | Job Platform`,
+    title: `${TITLE} | Jobnura`,
     description: DESCRIPTION,
     type: "website",
     ...(siteUrl ? { url: `${siteUrl}${path}` } : {}),
   },
   twitter: {
     card: "summary",
-    title: `${TITLE} | Job Platform`,
+    title: `${TITLE} | Jobnura`,
     description: DESCRIPTION,
   },
 };
