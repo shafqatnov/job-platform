@@ -7,18 +7,38 @@
  * checks itself, with a worse error message.
  *
  * REQUIRED_ENV_VARS are load-bearing for the app to function at all:
- * DATABASE_URL (src/lib/prisma.ts), BETTER_AUTH_SECRET/BETTER_AUTH_URL
- * (read implicitly by Better Auth itself — see src/lib/auth.ts).
+ * DATABASE_URL (src/lib/prisma.ts) and BETTER_AUTH_SECRET. Verified
+ * directly against Better Auth's own source
+ * (node_modules/better-auth/dist/context/create-context.mjs): if
+ * BETTER_AUTH_SECRET is missing/default, Better Auth's own
+ * validateSecret() throws whenever NODE_ENV === "production" — so this
+ * app cannot start in production without it either way.
  *
- * RECOMMENDED_ENV_VARS are NOT load-bearing — both consuming routes
- * (src/app/api/cron/expire-jobs, src/app/api/moderation/process-pending-jobs)
- * already fail closed (401) when their secret is unset, per
- * src/lib/security/secureTrigger.ts. Missing them is a real operational
- * gap (those endpoints are permanently unusable) worth surfacing, but
- * not a reason to crash the whole app.
+ * BETTER_AUTH_URL is deliberately NOT in REQUIRED_ENV_VARS, even though
+ * an earlier version of this file listed it there. Verified against the
+ * same source: when it's unset, Better Auth only logs its own warning
+ * ("Base URL is not set... callbacks and redirects may not work
+ * correctly") and falls back to deriving the origin from the incoming
+ * request for trusted-origin/CSRF checks — it never throws. Treating it
+ * as required here was stricter than the library it wraps, and caused a
+ * real first-deployment failure when BETTER_AUTH_URL was correctly left
+ * unset (no production domain existed yet). It belongs in
+ * RECOMMENDED_ENV_VARS instead: worth warning about, not a reason to
+ * crash the app.
+ *
+ * RECOMMENDED_ENV_VARS are NOT load-bearing:
+ *  - JOB_EXPIRY_CRON_SECRET / AI_MODERATION_TRIGGER_SECRET: both
+ *    consuming routes (src/app/api/cron/expire-jobs,
+ *    src/app/api/moderation/process-pending-jobs) already fail closed
+ *    (401) when their secret is unset, per
+ *    src/lib/security/secureTrigger.ts.
+ *  - BETTER_AUTH_URL: see above — Better Auth degrades gracefully, it
+ *    does not fail.
+ * Missing any of these is a real gap worth surfacing, but not a reason
+ * to crash the whole app.
  */
-const REQUIRED_ENV_VARS = ["DATABASE_URL", "BETTER_AUTH_SECRET", "BETTER_AUTH_URL"] as const;
-const RECOMMENDED_ENV_VARS = ["JOB_EXPIRY_CRON_SECRET", "AI_MODERATION_TRIGGER_SECRET"] as const;
+const REQUIRED_ENV_VARS = ["DATABASE_URL", "BETTER_AUTH_SECRET"] as const;
+const RECOMMENDED_ENV_VARS = ["BETTER_AUTH_URL", "JOB_EXPIRY_CRON_SECRET", "AI_MODERATION_TRIGGER_SECRET"] as const;
 
 export type EnvCheckResult = {
   missingRequired: string[];
@@ -52,7 +72,7 @@ export function validateEnvOnce(env: NodeJS.ProcessEnv = process.env): void {
 
   if (missingRecommended.length > 0) {
     console.warn(
-      `[env] Missing recommended environment variable(s): ${missingRecommended.join(", ")}. The corresponding automation endpoint(s) will safely reject every request (fail-closed) until configured — this is not a functional break.`
+      `[env] Missing recommended environment variable(s): ${missingRecommended.join(", ")}. The application will still start; the specific behavior each one affects (BETTER_AUTH_URL: auth callback/redirect URLs; JOB_EXPIRY_CRON_SECRET / AI_MODERATION_TRIGGER_SECRET: those automation endpoints safely reject every request until configured) may be degraded until it is set — this is not a functional break.`
     );
   }
 

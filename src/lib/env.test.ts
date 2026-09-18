@@ -31,6 +31,13 @@ describe("checkEnv", () => {
     expect(result.missingRecommended).toEqual(["JOB_EXPIRY_CRON_SECRET", "AI_MODERATION_TRIGGER_SECRET"]);
   });
 
+  it("treats a missing BETTER_AUTH_URL as recommended, never required — Better Auth itself only warns and falls back to a request-derived origin when it's unset, it does not fail (verified against node_modules/better-auth/dist/context/create-context.mjs)", () => {
+    const partial = { ...FULLY_CONFIGURED_ENV, BETTER_AUTH_URL: undefined } as unknown as NodeJS.ProcessEnv;
+    const result = checkEnv(partial);
+    expect(result.missingRequired).toEqual([]);
+    expect(result.missingRecommended).toEqual(["BETTER_AUTH_URL"]);
+  });
+
   it("never includes actual secret values in its result, only names", () => {
     const result = checkEnv(FULLY_CONFIGURED_ENV);
     const serialized = JSON.stringify(result);
@@ -48,6 +55,16 @@ describe("validateEnvOnce", () => {
       NODE_ENV: "production",
     } as unknown as NodeJS.ProcessEnv;
     expect(() => validateEnvOnce(broken)).toThrow(/BETTER_AUTH_SECRET/);
+  });
+
+  it("does not throw in production when only BETTER_AUTH_URL is missing (the exact first-deployment scenario this was fixed for)", () => {
+    __resetEnvValidationForTests();
+    const noSiteUrlYet = {
+      ...FULLY_CONFIGURED_ENV,
+      BETTER_AUTH_URL: undefined,
+      NODE_ENV: "production",
+    } as unknown as NodeJS.ProcessEnv;
+    expect(() => validateEnvOnce(noSiteUrlYet)).not.toThrow();
   });
 
   it("does not throw in development when a required var is missing (warns instead)", () => {
