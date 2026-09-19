@@ -20,7 +20,7 @@ export function JobSearchForm() {
     <form
       action="/jobs"
       method="get"
-      className="grid gap-4 rounded-2xl border border-border bg-surface p-4 shadow-xl sm:p-6 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto] lg:items-end"
+      className="grid gap-4 rounded-2xl border border-border bg-surface p-4 shadow-xl sm:p-6 sm:grid-cols-2 lg:grid-cols-[1.5fr_minmax(14rem,1fr)_minmax(14rem,1fr)_auto] lg:items-end"
     >
       <Input
         label="Keywords"
