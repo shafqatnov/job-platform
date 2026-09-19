@@ -54,20 +54,35 @@ export default async function EmployerJobApplicationsPage({ params }: PageProps<
           />
         ) : (
           <ul className="flex flex-col divide-y divide-border">
-            {applications.map((application) => (
-              <li
-                key={application.id}
-                className="flex flex-col gap-1 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <span className="font-medium text-foreground">{application.candidateName}</span>
-                <span className="text-sm text-muted-foreground">
-                  Applied {dateFormatter.format(new Date(application.appliedDate))}
-                </span>
-                <span className="text-sm font-medium text-foreground">
-                  {APPLICATION_STATUS_LABELS[application.status]}
-                </span>
-              </li>
-            ))}
+            {applications.map((application) => {
+              const location = [application.candidateCityName, application.candidateCountryName]
+                .filter(Boolean)
+                .join(", ");
+
+              return (
+                <li key={application.id} className="flex flex-col gap-1.5 py-4 first:pt-0 last:pb-0">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="font-medium text-foreground">{application.candidateName}</span>
+                    <span className="text-sm font-medium text-foreground">
+                      {APPLICATION_STATUS_LABELS[application.status]}
+                    </span>
+                  </div>
+
+                  {application.candidateHeadline ? (
+                    <p className="text-sm text-muted-foreground">{application.candidateHeadline}</p>
+                  ) : null}
+
+                  <div className="flex flex-wrap gap-x-3 text-sm text-muted-foreground">
+                    {location ? <span>{location}</span> : null}
+                    <span>Applied {dateFormatter.format(new Date(application.appliedDate))}</span>
+                  </div>
+
+                  {application.coverNote ? (
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{application.coverNote}</p>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
