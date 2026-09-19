@@ -4,7 +4,7 @@ import { useActionState, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
-import { Button } from "@/components/Button";
+import { Button, getButtonClassName } from "@/components/Button";
 import { CURRENCY_OPTIONS } from "@/constants/currencies";
 import { createJobAction, type CreateJobActionState } from "@/features/jobs/createJobAction";
 import { generateJobDescriptionAction } from "@/features/jobs/generateJobDescriptionAction";
@@ -89,7 +89,10 @@ export function JobCreateForm({ companyName, countries, categories, cities }: Jo
           hideLabel={false}
           className="disabled:text-foreground disabled:opacity-100"
         />
-        <Link href="/employer/company/edit" className="mt-1.5 inline-block text-sm font-medium text-brand-600 hover:text-brand-700">
+        <Link
+          href="/employer/company/edit"
+          className={`${getButtonClassName({ size: "sm", variant: "outline" })} mt-2`}
+        >
           Edit Company
         </Link>
       </div>
