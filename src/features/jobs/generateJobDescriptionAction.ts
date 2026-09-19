@@ -26,6 +26,7 @@ export async function generateJobDescriptionAction(formData: FormData): Promise<
     return { success: false, error: "You must be signed in as an employer to use this feature." };
   }
 
+  const companyName = String(formData.get("companyName") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
   const countrySlug = String(formData.get("country") ?? "").trim();
   const citySlug = String(formData.get("city") ?? "").trim();
@@ -45,6 +46,7 @@ export async function generateJobDescriptionAction(formData: FormData): Promise<
 
   const result = await generateJobDescription({
     title,
+    companyName: companyName || undefined,
     countryName: country?.name,
     cityName: city?.name,
     categoryName: category?.name,

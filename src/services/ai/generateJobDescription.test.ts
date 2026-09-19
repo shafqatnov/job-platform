@@ -149,4 +149,31 @@ describe("generateJobDescription", () => {
 
     expect(result.ok).toBe(false);
   });
+
+  it("includes the supplied company name in the prompt input, as the top-priority field", async () => {
+    createMock.mockResolvedValue({ status: "completed", output_text: "Overview\n..." });
+
+    await generateJobDescription({ ...VALID_INPUT, companyName: "Pakistan Oilfields Limited" });
+
+    const [requestArg] = createMock.mock.calls[0];
+    expect(requestArg.input).toContain("Company: Pakistan Oilfields Limited");
+  });
+
+  it("omits any company line from the prompt input when no company name is supplied", async () => {
+    createMock.mockResolvedValue({ status: "completed", output_text: "Overview\n..." });
+
+    await generateJobDescription(VALID_INPUT);
+
+    const [requestArg] = createMock.mock.calls[0];
+    expect(requestArg.input).not.toContain("Company:");
+  });
+
+  it("never instructs the model to add an Equal Opportunity Employer paragraph", async () => {
+    createMock.mockResolvedValue({ status: "completed", output_text: "Overview\n..." });
+
+    await generateJobDescription(VALID_INPUT);
+
+    const [requestArg] = createMock.mock.calls[0];
+    expect(requestArg.instructions).toMatch(/No Equal Opportunity/i);
+  });
 });

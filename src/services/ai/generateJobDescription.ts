@@ -13,10 +13,11 @@ import OpenAI, { APIConnectionTimeoutError } from "openai";
 
 export type GenerateJobDescriptionInput = {
   title: string;
+  companyName?: string | null;
   countryName?: string | null;
   cityName?: string | null;
   categoryName?: string | null;
-  /** The employer's own in-progress draft, if any — improved upon, never contradicted. */
+  /** The employer's own in-progress draft, if any — treated as authoritative context, never ignored or contradicted. */
   existingDescription?: string;
   salaryMin?: number;
   salaryMax?: number;
@@ -45,43 +46,64 @@ const GENERIC_ERROR = "We couldn't generate a description right now. Please try 
  * calling are enabled, so the model can only ever work with what's
  * given here.
  */
-const SYSTEM_INSTRUCTIONS = `You are an expert global recruitment copywriter helping an employer draft a professional job description for a job listings platform.
+const SYSTEM_INSTRUCTIONS = `You are an experienced HR recruiter and professional copywriter drafting a job description for a job listings platform.
 
-You will be given the job fields an employer has entered so far. Write a clear, professional, realistic job description using ONLY that information.
+Treat every employer-supplied field below as authoritative and final. You are drafting TEXT, not making decisions — never second-guess, reinterpret, or substitute any supplied value.
 
-Structure the output as plain text with these sections, in this order:
-1. Overview
-2. Key Responsibilities
-3. Required Qualifications
-4. Preferred Skills/Experience — include this section ONLY if there is a genuine basis for it in the supplied information; otherwise omit it.
+You will be given the employer's fields in this priority order: Company, Job title, Existing description (if any), Category, Country, City, Salary (if supplied), Application method (if relevant). Use the existing description as real context to build on — never ignore it, never contradict anything it states.
 
-Strict rules:
-- Never invent a salary, compensation figure, or benefit that was not explicitly supplied.
-- Never invent or assume a company name, brand, or employer detail beyond what is given.
-- Never invent or alter the stated location.
-- Never claim visa sponsorship, relocation assistance, or any other benefit unless it was explicitly supplied.
-- Never include discriminatory requirements (age, gender, marital status, religion, national origin, disability, or similar).
-- Never make legal guarantees or exaggerated/unverifiable claims.
-- Never include contact information, email addresses, or phone numbers.
-- Do not use markdown tables. Plain text only — simple line breaks and dashes for lists are fine, but no markdown headers, no HTML.
-- If information for a section is missing, write a brief, useful, generic section instead of fabricating facts.
-- If an existing draft description is supplied, improve and expand on it — never contradict details it already states.`;
+You MUST NEVER invent, assume, or infer any of the following beyond exactly what was supplied:
+- Company name or any detail about the company
+- Category (if a category was supplied, use that EXACT category — never substitute or infer a different one)
+- Country or city
+- Salary or any compensation figure
+- Benefits of any kind
+- Visa sponsorship or relocation assistance
+- Remote/on-site/hybrid work arrangement
+- Hiring process or interview steps
+- Certifications
+- Specific technologies or tools
+- Years of experience required
+- Employment type (full-time/part-time/contract)
+
+Concretely:
+- If no salary was supplied, do not mention salary, pay, or compensation at all.
+- If nothing about visa sponsorship was supplied, do not mention visas or sponsorship at all.
+- If no benefits were supplied, do not invent or imply any benefit.
+- If no work arrangement was supplied, do not state or imply remote, on-site, or hybrid.
+- If some information for a section is missing, write a brief, professional, genuinely useful section without fabricating specifics — do not pad it with invented facts to sound complete.
+
+Output format — plain text only, with exactly these section headings in this order: Overview, Key Responsibilities, Required Qualifications, Preferred Skills.
+
+Writing quality:
+- Write like an experienced HR recruiter: concise, natural, professional English.
+- Avoid repetitive sentences and vague generic phrases ("dynamic team", "fast-paced environment", "wear many hats", and similar filler).
+- Avoid unnecessary verbosity — every sentence should carry real information.
+- No emojis.
+- No markdown tables, markdown headers, or HTML — plain text with simple line breaks and dashes for lists only.
+- No fake or promotional marketing claims about the company beyond what was supplied.
+- No Equal Opportunity Employer statement or other generic legal/compliance boilerplate paragraph.
+- No discriminatory requirements (age, gender, marital status, religion, national origin, disability, or similar).
+- No legal guarantees or exaggerated/unverifiable claims.
+- No contact information, email addresses, or phone numbers.`;
 
 function buildUserInput(input: GenerateJobDescriptionInput): string {
-  const lines = [`Job title: ${input.title}`];
+  const lines: string[] = [];
+  if (input.companyName) lines.push(`Company: ${input.companyName}`);
+  lines.push(`Job title: ${input.title}`);
+  if (input.existingDescription) {
+    lines.push("", "Existing description (authoritative context — build on this, never contradict it):", input.existingDescription, "");
+  } else {
+    lines.push("", "No existing description was provided.", "");
+  }
   if (input.categoryName) lines.push(`Category: ${input.categoryName}`);
-  const location = [input.cityName, input.countryName].filter(Boolean).join(", ");
-  if (location) lines.push(`Location: ${location}`);
+  if (input.countryName) lines.push(`Country: ${input.countryName}`);
+  if (input.cityName) lines.push(`City: ${input.cityName}`);
   if (input.salaryMin && input.salaryMax && input.currencyCode) {
     lines.push(`Salary range: ${input.currencyCode} ${input.salaryMin}–${input.salaryMax}`);
   }
   if (input.applicationMethod) {
     lines.push(`Application method: ${input.applicationMethod === "external_url" ? "external link" : "on-platform application"}`);
-  }
-  if (input.existingDescription) {
-    lines.push("", "Existing draft description provided by the employer:", input.existingDescription);
-  } else {
-    lines.push("", "No existing description was provided — write one from scratch using only the fields above.");
   }
   return lines.join("\n");
 }

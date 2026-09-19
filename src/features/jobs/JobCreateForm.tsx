@@ -54,6 +54,10 @@ export function JobCreateForm({ companyName, countries, categories, cities }: Jo
     setGenerationError(null);
     try {
       const formData = new FormData(formRef.current);
+      // The Company field above is disabled and unnamed (never editable by
+      // the employer), so it's never part of native form serialization —
+      // set it explicitly so the AI still receives it as its top-priority input.
+      formData.set("companyName", companyName);
       const result = await generateJobDescriptionAction(formData);
       if (!result.success) {
         setGenerationError(result.error);
