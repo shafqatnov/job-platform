@@ -407,3 +407,52 @@ model ModerationAction {
   @@index([targetJobId])
   @@index([targetUserId])
 }
+
+// Foundation for the future AI Job Acquisition Engine. This is
+// CONFIGURATION only — no provider-specific fetching/connector logic
+// lives here, and enabling a row never triggers an import by itself (no
+// code path reads `enabled` yet). A future connector layer will read
+// this registry; it must never write provider logic into it.
+//
+// Named AuthorizedJobSource (not JobSource) to avoid colliding with the
+// existing JobSource enum on the Job model above, which tracks how an
+// individual Job row was sourced (currently only `employer_direct`) —
+// a distinct concept from this registry of available source configs.
+enum JobSourceType {
+  API
+  FEED
+  ATS
+  OFFICIAL_CAREER_SOURCE
+}
+
+model AuthorizedJobSource {
+  id         String        @id @default(uuid())
+  name       String        @unique
+  sourceType JobSourceType
+
+  // Public configuration reference only (e.g. a documented API base URL).
+  // Never a secret — see credentialEnvVarName below for how credentials
+  // are referenced instead of stored.
+  baseEndpoint String?
+
+  enabled             Boolean @default(false)
+  attributionRequired Boolean @default(true)
+
+  // Null means "no polling configured" — most sources start this way
+  // since no connector exists yet to poll on a schedule.
+  refreshIntervalMinutes Int?
+
+  // Free-text, matching ModerationAction.action's existing convention:
+  // no fixed vocabulary exists yet for source health/lifecycle states.
+  status String @default("not_configured")
+
+  // Stores only the NAME of an environment variable a future connector
+  // should read (e.g. "ADZUNA_APP_KEY") — never the credential value
+  // itself. Null means no credential is configured for this source.
+  credentialEnvVarName String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

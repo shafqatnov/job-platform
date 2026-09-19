@@ -37,6 +37,17 @@ export default async function AdminDashboardPage() {
             View all jobs
           </Link>
         </Card>
+
+        <Card padding="lg" className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold text-foreground">Job sources</h2>
+          <p className="text-muted-foreground">Manage the authorized source registry for future job acquisition.</p>
+          <Link
+            href="/admin/job-sources"
+            className={getButtonClassName({ variant: "outline", className: "self-start" })}
+          >
+            Manage job sources
+          </Link>
+        </Card>
       </div>
     </Section>
   );
