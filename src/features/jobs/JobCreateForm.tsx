@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Button } from "@/components/Button";
 import { CURRENCY_OPTIONS } from "@/constants/currencies";
 import { createJobAction, type CreateJobActionState } from "@/features/jobs/createJobAction";
+import { generateJobDescriptionAction } from "@/features/jobs/generateJobDescriptionAction";
 import type { CategoryOption, CityOption, CountryOption } from "@/services/jobs/referenceData";
 
 export type JobCreateFormProps = {
@@ -27,6 +28,12 @@ export function JobCreateForm({ companyName, countries, categories, cities }: Jo
   const [countrySlug, setCountrySlug] = useState(countries[0]?.slug ?? "");
   const [applicationMethod, setApplicationMethod] = useState("on_platform");
 
+  const formRef = useRef<HTMLFormElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+
   const selectedCountry = countries.find((country) => country.slug === countrySlug);
   const citiesForCountry = useMemo(
     () => cities.filter((city) => city.countryId === selectedCountry?.id),
@@ -35,8 +42,40 @@ export function JobCreateForm({ companyName, countries, categories, cities }: Jo
 
   const fieldErrors = state.fieldErrors ?? {};
 
+  // Reads the form's own CURRENT (unsaved) field values via FormData —
+  // never a separate parallel state for every field — and asks the
+  // server to draft a description from them. Generates into a preview
+  // only; the real description field is never touched until the
+  // employer explicitly clicks "Use this description" below, so an
+  // in-progress manual draft is never silently overwritten.
+  async function handleGenerateWithAi() {
+    if (!formRef.current) return;
+    setIsGenerating(true);
+    setGenerationError(null);
+    try {
+      const formData = new FormData(formRef.current);
+      const result = await generateJobDescriptionAction(formData);
+      if (!result.success) {
+        setGenerationError(result.error);
+        return;
+      }
+      setSuggestion(result.description);
+    } catch {
+      setGenerationError("We couldn't generate a description right now. Please try again or write one manually.");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  function handleUseSuggestion() {
+    if (descriptionRef.current && suggestion) {
+      descriptionRef.current.value = suggestion;
+    }
+    setSuggestion(null);
+  }
+
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-5">
       <Input label="Company" value={companyName} disabled hideLabel={false} />
 
       <Input label="Job title" name="title" required maxLength={200} error={fieldErrors.title} />
@@ -44,6 +83,7 @@ export function JobCreateForm({ companyName, countries, categories, cities }: Jo
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-foreground">Description</span>
         <textarea
+          ref={descriptionRef}
           name="description"
           required
           rows={8}
@@ -55,6 +95,34 @@ export function JobCreateForm({ companyName, countries, categories, cities }: Jo
           <p className="text-sm text-danger-600">{fieldErrors.description}</p>
         ) : null}
       </label>
+
+      <div className="flex flex-col gap-2">
+        <Button type="button" variant="outline" size="sm" disabled={isGenerating} onClick={handleGenerateWithAi}>
+          {isGenerating ? "Generating…" : "Generate with AI"}
+        </Button>
+        <p className="text-sm text-muted-foreground">
+          Uses the job details above to draft a starting description you can edit before posting.
+        </p>
+        {generationError ? (
+          <p role="alert" className="text-sm text-danger-600">
+            {generationError}
+          </p>
+        ) : null}
+        {suggestion ? (
+          <div className="flex flex-col gap-2 rounded-md border border-border bg-surface-muted p-3" role="status">
+            <p className="text-sm font-medium text-foreground">AI-generated suggestion</p>
+            <p className="whitespace-pre-wrap text-sm text-foreground">{suggestion}</p>
+            <div className="flex gap-2">
+              <Button type="button" size="sm" onClick={handleUseSuggestion}>
+                Use this description
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setSuggestion(null)}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Select
