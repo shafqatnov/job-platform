@@ -82,7 +82,13 @@ export function JobCreateForm({ companyName, countries, categories, cities }: Jo
   return (
     <form ref={formRef} action={formAction} className="flex flex-col gap-5">
       <div>
-        <Input label="Company" value={companyName} disabled hideLabel={false} />
+        <Input
+          label="Company"
+          value={companyName}
+          disabled
+          hideLabel={false}
+          className="disabled:text-foreground disabled:opacity-100"
+        />
         <Link href="/employer/company/edit" className="mt-1.5 inline-block text-sm font-medium text-brand-600 hover:text-brand-700">
           Edit Company
         </Link>
