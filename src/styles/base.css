@@ -6,6 +6,14 @@
 
 html {
   color-scheme: light dark;
+  /* Header.tsx's public header is `sticky top-0` at a fixed `h-16` (4rem)
+     on every breakpoint. Without this, any anchor-jump to a heading
+     further down the page (e.g. a hash link to a section, or a browser
+     "find in page" match) scrolls that heading's top edge to the very
+     top of the viewport — landing it visually underneath the sticky
+     header instead of below it. This reserves that space for ANY
+     anchor target on the page, not just one section. */
+  scroll-padding-top: 4rem;
 }
 
 body {

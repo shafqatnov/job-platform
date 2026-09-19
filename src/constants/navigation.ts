@@ -15,6 +15,7 @@ export type FooterLinkGroup = {
  * as those pages are built, rather than being wired to placeholder pages.
  */
 export const PRIMARY_NAV_ITEMS: NavItem[] = [
+  { label: "Home", href: "/" },
   { label: "Find Jobs", href: "/jobs" },
   { label: "About", href: "/about" },
 ];

@@ -45,7 +45,7 @@ export function AccountNav() {
           Dashboard
         </Link>
       ) : null}
-      <span className="hidden text-sm text-muted-foreground sm:inline">{session.user.name}</span>
+      <span className="hidden text-sm font-semibold text-muted-foreground sm:inline">{session.user.name}</span>
       <SignOutButton />
     </div>
   );
