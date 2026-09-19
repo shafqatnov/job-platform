@@ -4,6 +4,7 @@ import { Section } from "@/components/Section";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { JobReviewActions } from "@/features/admin/JobReviewActions";
+import { AdminJobLifecycleActions } from "@/features/admin/JobLifecycleActions";
 import { ModerationSignalsPanel } from "@/features/admin/ModerationSignalsPanel";
 import { getJobForAdmin } from "@/services/admin/getJobForAdmin";
 import { runDeterministicGates } from "@/services/moderation/deterministicGates";
@@ -156,9 +157,19 @@ export default async function AdminJobReviewPage({ params }: PageProps<"/admin/j
           </Card>
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          This job has already been reviewed and can no longer be approved or rejected here.
-        </p>
+        <Card padding="lg">
+          <h2 className="mb-4 text-lg font-semibold text-foreground">Manage listing</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            This job has already been reviewed and can no longer be approved or rejected here.
+          </p>
+          <AdminJobLifecycleActions
+            jobId={job.id}
+            jobTitle={job.title}
+            companyName={job.companyName}
+            status={job.status}
+            canDelete={job.applicationCount === 0 && job.savedJobCount === 0}
+          />
+        </Card>
       )}
     </Section>
   );

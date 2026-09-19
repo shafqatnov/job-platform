@@ -20,8 +20,12 @@ export type AdminJobDetail = {
   status: JobStatus;
   rejectionReason?: string;
   createdAt: string;
+  expiresAt?: string;
+  closedAt?: string;
   employerName: string;
   employerEmail: string;
+  applicationCount: number;
+  savedJobCount: number;
 };
 
 /**
@@ -48,12 +52,15 @@ export async function getJobForAdmin(jobId: string): Promise<AdminJobDetail | nu
       salaryMax: true,
       currencyCode: true,
       createdAt: true,
+      expiresAt: true,
+      closedAt: true,
       deletedAt: true,
       company: { select: { name: true } },
       country: { select: { name: true, urlSlug: true } },
       city: { select: { name: true } },
       category: { select: { name: true } },
       postedBy: { select: { name: true, email: true } },
+      _count: { select: { applications: { where: { deletedAt: null } }, savedBy: true } },
     },
   });
 
@@ -80,7 +87,11 @@ export async function getJobForAdmin(jobId: string): Promise<AdminJobDetail | nu
     status: job.status,
     rejectionReason: job.rejectionReason ?? undefined,
     createdAt: job.createdAt.toISOString(),
+    expiresAt: job.expiresAt ? job.expiresAt.toISOString() : undefined,
+    closedAt: job.closedAt ? job.closedAt.toISOString() : undefined,
     employerName: job.postedBy.name,
     employerEmail: job.postedBy.email,
+    applicationCount: job._count.applications,
+    savedJobCount: job._count.savedBy,
   };
 }

@@ -1,12 +1,14 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { expireDueJobs } from "@/services/jobs/expireJobs";
+import { applyToJob } from "@/services/applications/applyToJob";
 import {
   createModerationTestFixtures,
   createTestJob,
   cleanupModerationTestFixtures,
   type ModerationTestFixtures,
 } from "@/test-utils/moderationFixtures";
+import { createCandidateTestFixtures, cleanupCandidateTestFixtures } from "@/test-utils/candidateFixtures";
 
 const revalidatePathMock = vi.fn();
 vi.mock("next/cache", () => ({
@@ -73,5 +75,51 @@ describe("expireDueJobs revalidation (real dev database, temporary fixtures)", (
 
     const unchanged = await prisma.job.findUniqueOrThrow({ where: { id: job.id }, select: { status: true } });
     expect(unchanged.status).toBe("active");
+  });
+
+  it("expires the correct eligible job while leaving an unrelated, not-yet-due job unchanged in the same run", async () => {
+    const dueJob = await createTestJob(fixtures, {
+      status: "active",
+      expiresAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
+    const notDueJob = await createTestJob(fixtures, {
+      status: "active",
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+
+    await expireDueJobs();
+
+    const [dueResult, notDueResult] = await Promise.all([
+      prisma.job.findUniqueOrThrow({ where: { id: dueJob.id }, select: { status: true } }),
+      prisma.job.findUniqueOrThrow({ where: { id: notDueJob.id }, select: { status: true } }),
+    ]);
+    expect(dueResult.status).toBe("expired");
+    expect(notDueResult.status).toBe("active");
+  });
+
+  it("preserves an existing application after its job expires", async () => {
+    const candidate = await createCandidateTestFixtures();
+    try {
+      const job = await createTestJob(fixtures, {
+        status: "active",
+        applicationMethod: "on_platform",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // not yet due — apply first
+      });
+      const applyResult = await applyToJob({ userId: candidate.userId, jobId: job.id });
+      expect(applyResult.success).toBe(true);
+
+      // Now make it due and expire it.
+      await prisma.job.update({ where: { id: job.id }, data: { expiresAt: new Date(Date.now() - 60 * 60 * 1000) } });
+      await expireDueJobs();
+
+      const updatedJob = await prisma.job.findUniqueOrThrow({ where: { id: job.id }, select: { status: true } });
+      expect(updatedJob.status).toBe("expired");
+
+      const application = await prisma.application.findFirst({ where: { jobId: job.id } });
+      expect(application).not.toBeNull();
+      expect(application?.deletedAt).toBeNull();
+    } finally {
+      await cleanupCandidateTestFixtures(candidate);
+    }
   });
 });

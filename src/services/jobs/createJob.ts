@@ -18,6 +18,8 @@ export type CreateJobInput = {
   currencyCode: string;
   applicationMethod: string;
   externalApplicationUrl: string;
+  /** Optional — an empty string means "no expiry requested," matching every other optional field in this input. */
+  expiryDate: string;
 };
 
 export type CreateJobFieldErrors = Partial<
@@ -30,7 +32,8 @@ export type CreateJobFieldErrors = Partial<
     | "salary"
     | "currency"
     | "applicationMethod"
-    | "externalUrl",
+    | "externalUrl"
+    | "expiryDate",
     string
   >
 >;
@@ -66,10 +69,12 @@ export function isSafeExternalUrl(value: string): boolean {
  * server-side from their own EmployerProfile — never from client input.
  *
  * Initial lifecycle state is `pending_review` (the default), per
- * docs/18-job-lifecycle.md: only an admin-approval transition (not
- * built in this task) moves a job to `active`. postedAt/expiresAt stay
- * null — docs/18 states those are set at that same approval step, not
- * at submission.
+ * docs/18-job-lifecycle.md: only an admin-approval transition moves a
+ * job to `active`. postedAt always stays null until that step.
+ * expiresAt stays null too UNLESS the employer explicitly requested a
+ * listing expiry at submission (see the "Version 1.1 optional expiry"
+ * validation above) — approval preserves an employer-requested value
+ * instead of overwriting it with the platform default.
  */
 export async function createJob(input: CreateJobInput): Promise<CreateJobResult> {
   const fieldErrors: CreateJobFieldErrors = {};
@@ -151,6 +156,26 @@ export async function createJob(input: CreateJobInput): Promise<CreateJobResult>
     }
   }
 
+  // Optional employer-requested expiry (docs/18's employer-editable
+  // listing duration). Left unset (null), the existing default — applied
+  // at approval time, see approveJob.ts/autoApproveJob.ts — is unchanged.
+  // Validated the same way any other date input in this codebase would
+  // be: plain `Date` parsing against the server's own clock, no
+  // per-country/per-user timezone conversion (none exists anywhere else
+  // in this app, so none is invented here either).
+  const rawExpiryDate = input.expiryDate.trim();
+  let expiryDate: Date | null = null;
+  if (rawExpiryDate) {
+    const parsed = new Date(rawExpiryDate);
+    if (Number.isNaN(parsed.getTime())) {
+      fieldErrors.expiryDate = "Please enter a valid expiry date and time.";
+    } else if (parsed <= new Date()) {
+      fieldErrors.expiryDate = "Expiry date must be in the future.";
+    } else {
+      expiryDate = parsed;
+    }
+  }
+
   if (Object.keys(fieldErrors).length > 0) {
     return { success: false, fieldErrors };
   }
@@ -209,8 +234,15 @@ export async function createJob(input: CreateJobInput): Promise<CreateJobResult>
         currencyCode: hasSalaryMin ? currencyCode : null,
         salaryMin: hasSalaryMin ? salaryMin : null,
         salaryMax: hasSalaryMax ? salaryMax : null,
-        // status defaults to pending_review; postedAt/expiresAt stay null
-        // until an admin-approval step (not built in this task) sets them.
+        // status defaults to pending_review; postedAt stays null until
+        // approval. expiresAt is set here ONLY if the employer requested
+        // one — while status is pending_review this is completely inert
+        // (every public-read path and the expiry cron require status =
+        // active first), and approveJob.ts/autoApproveJob.ts preserve it
+        // instead of overwriting it with the default duration once the
+        // job goes active. Left null (the common case), approval sets
+        // the existing default exactly as before this field existed.
+        expiresAt: expiryDate,
       },
       select: { id: true, slug: true },
     });
