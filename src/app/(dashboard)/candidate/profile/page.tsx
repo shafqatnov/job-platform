@@ -5,6 +5,7 @@ import { Card } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
 import { getButtonClassName } from "@/components/Button";
 import { EditCandidateProfileForm } from "@/features/candidates/EditCandidateProfileForm";
+import { ResumeUploadField } from "@/features/candidates/ResumeUploadField";
 import { getSessionUser } from "@/services/auth/getSessionUser";
 import { getCandidateProfile } from "@/services/candidates/getCandidateProfile";
 import { listCountries, listCities } from "@/services/jobs/referenceData";
@@ -58,6 +59,9 @@ export default async function CandidateProfilePage() {
           initialCountrySlug={profile.countrySlug}
           initialCitySlug={profile.citySlug ?? ""}
         />
+      </Card>
+      <Card padding="lg" className="mt-6">
+        <ResumeUploadField hasResume={profile.hasResume} />
       </Card>
     </Section>
   );

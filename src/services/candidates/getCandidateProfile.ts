@@ -8,6 +8,13 @@ export type CandidateProfileSummary = {
   countryName: string;
   citySlug: string | null;
   cityName: string | null;
+  /**
+   * Whether a resume is currently on file — deliberately a boolean, not
+   * the raw resumeFileUrl. The URL itself is private-access storage
+   * grants access on its own; it must never reach the client directly,
+   * only through the session-checked download route.
+   */
+  hasResume: boolean;
 };
 
 /**
@@ -32,6 +39,7 @@ export async function getCandidateProfile(userId: string): Promise<CandidateProf
       id: true,
       fullName: true,
       headline: true,
+      resumeFileUrl: true,
       country: { select: { urlSlug: true, name: true } },
       city: { select: { slug: true, name: true } },
     },
@@ -49,5 +57,6 @@ export async function getCandidateProfile(userId: string): Promise<CandidateProf
     countryName: profile.country.name,
     citySlug: profile.city?.slug ?? null,
     cityName: profile.city?.name ?? null,
+    hasResume: profile.resumeFileUrl !== null,
   };
 }

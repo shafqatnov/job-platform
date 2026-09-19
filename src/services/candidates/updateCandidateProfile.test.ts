@@ -40,6 +40,23 @@ describe("updateCandidateProfile (real dev database, temporary fixtures)", () =>
     const profile = await getCandidateProfile(fixtureA.userId);
     expect(profile?.id).toBe(fixtureA.candidateProfileId);
     expect(profile?.fullName).toBe("[CANDIDATE DASHBOARD TEST] Full Name");
+    expect(profile?.hasResume).toBe(false);
+  });
+
+  it("reports hasResume: true once a resume URL is on file, and never exposes the URL itself", async () => {
+    await prisma.candidateProfile.update({
+      where: { id: fixtureA.candidateProfileId },
+      data: { resumeFileUrl: "https://blob.example.invalid/resume.pdf" },
+    });
+
+    const profile = await getCandidateProfile(fixtureA.userId);
+    expect(profile?.hasResume).toBe(true);
+    expect(JSON.stringify(profile)).not.toContain("blob.example.invalid");
+
+    await prisma.candidateProfile.update({
+      where: { id: fixtureA.candidateProfileId },
+      data: { resumeFileUrl: null },
+    });
   });
 
   it("updates its own profile, including a new headline", async () => {

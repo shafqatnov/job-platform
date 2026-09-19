@@ -7,6 +7,7 @@ const FULLY_CONFIGURED_ENV = {
   BETTER_AUTH_URL: "http://localhost:3000",
   JOB_EXPIRY_CRON_SECRET: "test-cron-secret",
   AI_MODERATION_TRIGGER_SECRET: "test-moderation-secret",
+  BLOB_READ_WRITE_TOKEN: "test-blob-token",
 } as unknown as NodeJS.ProcessEnv;
 
 describe("checkEnv", () => {
@@ -36,6 +37,13 @@ describe("checkEnv", () => {
     const result = checkEnv(partial);
     expect(result.missingRequired).toEqual([]);
     expect(result.missingRecommended).toEqual(["BETTER_AUTH_URL"]);
+  });
+
+  it("treats a missing BLOB_READ_WRITE_TOKEN as recommended, never required — only the candidate resume feature needs it, and @vercel/blob itself fails closed for that one feature when it's unset", () => {
+    const partial = { ...FULLY_CONFIGURED_ENV, BLOB_READ_WRITE_TOKEN: undefined } as unknown as NodeJS.ProcessEnv;
+    const result = checkEnv(partial);
+    expect(result.missingRequired).toEqual([]);
+    expect(result.missingRecommended).toEqual(["BLOB_READ_WRITE_TOKEN"]);
   });
 
   it("never includes actual secret values in its result, only names", () => {

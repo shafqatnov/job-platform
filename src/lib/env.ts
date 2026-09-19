@@ -34,11 +34,20 @@
  *    src/lib/security/secureTrigger.ts.
  *  - BETTER_AUTH_URL: see above — Better Auth degrades gracefully, it
  *    does not fail.
+ *  - BLOB_READ_WRITE_TOKEN: only the candidate resume-upload/download
+ *    feature (src/app/api/candidate/resume/*) needs it; @vercel/blob
+ *    itself throws a clear error for that one feature if it's missing,
+ *    which is feature-scoped, not a reason to crash the whole app.
  * Missing any of these is a real gap worth surfacing, but not a reason
  * to crash the whole app.
  */
 const REQUIRED_ENV_VARS = ["DATABASE_URL", "BETTER_AUTH_SECRET"] as const;
-const RECOMMENDED_ENV_VARS = ["BETTER_AUTH_URL", "JOB_EXPIRY_CRON_SECRET", "AI_MODERATION_TRIGGER_SECRET"] as const;
+const RECOMMENDED_ENV_VARS = [
+  "BETTER_AUTH_URL",
+  "JOB_EXPIRY_CRON_SECRET",
+  "AI_MODERATION_TRIGGER_SECRET",
+  "BLOB_READ_WRITE_TOKEN",
+] as const;
 
 export type EnvCheckResult = {
   missingRequired: string[];
