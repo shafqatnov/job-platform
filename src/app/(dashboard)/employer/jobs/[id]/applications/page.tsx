@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Section } from "@/components/Section";
 import { Card } from "@/components/Card";
@@ -80,6 +81,13 @@ export default async function EmployerJobApplicationsPage({ params }: PageProps<
                   {application.coverNote ? (
                     <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{application.coverNote}</p>
                   ) : null}
+
+                  <Link
+                    href={`/employer/jobs/${job.id}/applications/${application.id}`}
+                    className="mt-1 text-sm font-medium text-brand-600 hover:text-brand-700"
+                  >
+                    View Application
+                  </Link>
                 </li>
               );
             })}
