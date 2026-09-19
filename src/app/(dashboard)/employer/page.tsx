@@ -38,9 +38,16 @@ export default async function EmployerDashboardPage({
           </h1>
           {user ? <p className="text-muted-foreground">Signed in as {user.email}</p> : null}
         </div>
-        <Link href={postJobHref} className={getButtonClassName({ size: "lg" })}>
-          Post a Job
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          {employerCompany ? (
+            <Link href="/employer/company/edit" className={getButtonClassName({ size: "lg", variant: "outline" })}>
+              Edit Company
+            </Link>
+          ) : null}
+          <Link href={postJobHref} className={getButtonClassName({ size: "lg" })}>
+            Post a Job
+          </Link>
+        </div>
       </div>
 
       {justPosted ? (

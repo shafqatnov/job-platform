@@ -4,6 +4,9 @@ export type EmployerCompany = {
   employerProfileId: string;
   companyId: string;
   companyName: string;
+  websiteUrl: string | null;
+  description: string | null;
+  countrySlug: string | null;
 };
 
 /**
@@ -20,7 +23,13 @@ export type EmployerCompany = {
 export async function getEmployerCompany(userId: string): Promise<EmployerCompany | null> {
   const profile = await prisma.employerProfile.findUnique({
     where: { userId },
-    select: { id: true, companyId: true, company: { select: { name: true } } },
+    select: {
+      id: true,
+      companyId: true,
+      company: {
+        select: { name: true, websiteUrl: true, description: true, country: { select: { urlSlug: true } } },
+      },
+    },
   });
 
   if (!profile) {
@@ -31,5 +40,8 @@ export async function getEmployerCompany(userId: string): Promise<EmployerCompan
     employerProfileId: profile.id,
     companyId: profile.companyId,
     companyName: profile.company.name,
+    websiteUrl: profile.company.websiteUrl,
+    description: profile.company.description,
+    countrySlug: profile.company.country?.urlSlug ?? null,
   };
 }
