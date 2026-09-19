@@ -2,8 +2,8 @@ import Link from "next/link";
 import { Container } from "@/components/Container";
 import { PrimaryNav } from "@/components/PrimaryNav";
 import { MobileNav } from "@/components/MobileNav";
-import { getButtonClassName } from "@/components/Button";
 import { AccountNav } from "@/features/auth/AccountNav";
+import { EmployerCtaLink } from "@/features/employers/EmployerCtaLink";
 import { PRIMARY_NAV_ITEMS, EMPLOYER_CTA_ITEM } from "@/constants/navigation";
 
 const MOBILE_NAV_ITEMS = [...PRIMARY_NAV_ITEMS, EMPLOYER_CTA_ITEM];
@@ -25,9 +25,7 @@ export function Header() {
 
         <div className="hidden items-center gap-8 md:flex">
           <PrimaryNav items={PRIMARY_NAV_ITEMS} />
-          <Link href={EMPLOYER_CTA_ITEM.href} className={getButtonClassName({ size: "sm" })}>
-            {EMPLOYER_CTA_ITEM.label}
-          </Link>
+          <EmployerCtaLink />
           <AccountNav />
         </div>
 

@@ -34,6 +34,7 @@ export function JobSearchForm() {
         label="Country"
         name="country"
         placeholder="Any country"
+        defaultValue=""
         icon={<GlobeIcon className="h-4 w-4" />}
         options={COUNTRIES.map((country) => ({ value: country.code, label: country.name }))}
       />
@@ -41,6 +42,7 @@ export function JobSearchForm() {
         label="Category"
         name="category"
         placeholder="Any category"
+        defaultValue=""
         icon={<BriefcaseIcon className="h-4 w-4" />}
         options={JOB_CATEGORIES.map((category) => ({ value: category.slug, label: category.name }))}
       />
