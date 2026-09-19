@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
@@ -21,7 +20,6 @@ const ACCOUNT_TYPE_OPTIONS = [
  * (authClient.signUp.email) — no parallel/custom auth system.
  */
 export function SignUpForm() {
-  const router = useRouter();
   const errorId = useId();
 
   const [name, setName] = useState("");
@@ -55,8 +53,10 @@ export function SignUpForm() {
       return;
     }
 
-    router.push(data?.user.role === "employer" ? "/employer" : "/");
-    router.refresh();
+    // Hard navigation for the same reason as SignInForm/SignOutButton:
+    // avoids replaying a previous session's cached employer/candidate
+    // pages from Next.js's URL-keyed, session-unaware Router Cache.
+    window.location.href = data?.user.role === "employer" ? "/employer" : "/";
   }
 
   return (

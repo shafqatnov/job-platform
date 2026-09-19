@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -11,7 +10,6 @@ import { Button } from "@/components/Button";
  * (authClient.signIn.email) — no manual credential/cookie handling.
  */
 export function SignInForm() {
-  const router = useRouter();
   const errorId = useId();
 
   const [email, setEmail] = useState("");
@@ -34,8 +32,13 @@ export function SignInForm() {
       return;
     }
 
-    router.push(data?.user.role === "employer" ? "/employer" : "/");
-    router.refresh();
+    // A full navigation, not router.push/refresh: signing in without an
+    // intervening full reload (e.g. re-authenticating as a different
+    // account from /sign-in in the same tab) can leave the previous
+    // session's already-rendered employer/candidate pages sitting in
+    // Next.js's client Router Cache, which is keyed by URL, not session.
+    // A hard navigation guarantees the next page is a fresh server render.
+    window.location.href = data?.user.role === "employer" ? "/employer" : "/";
   }
 
   return (
