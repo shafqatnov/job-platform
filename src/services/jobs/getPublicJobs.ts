@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { JobListItem } from "@/features/jobs/types";
+import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
 
 export type GetPublicJobsOptions = {
   /** Restrict results to one country by its public URL slug (e.g. "uk"), not its ISO code. */
@@ -23,6 +24,12 @@ const PUBLIC_JOBS_PAGE_SIZE = 24;
  * the expiresAt check here stays as a defensive backstop against that
  * window, not a substitute for the transition itself.
  *
+ * Also excludes the confirmed disposable test-fixture markers via the
+ * shared publicJobVisibilityWhere() rule (see publicJobVisibility.ts) —
+ * an exact title-prefix match only, never a "test"/"qa" keyword filter,
+ * so legitimate titles like "QA Test Engineer" or "Test Inspector" are
+ * never affected.
+ *
  * This is the only place allowed to query Job for the public listing —
  * callers (src/features/jobs) must go through this function, never
  * import src/lib/prisma directly. Supports an optional country scope,
@@ -41,14 +48,14 @@ export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise
 
   const jobs = await prisma.job.findMany({
     where: {
-      status: "active",
-      deletedAt: null,
-      // Combined via AND rather than a second top-level OR key, which
-      // would silently overwrite the expiry check above it (a plain
-      // object literal keeps only the last `OR`) — each independent
-      // OR-condition gets its own array entry instead.
+      // The one centralized "is this Job publicly visible" rule (see
+      // publicJobVisibility.ts) is nested as its own AND-array entry —
+      // rather than spread at the top level — specifically so it can
+      // never collide with this function's own top-level `OR` key below
+      // (a plain object literal keeps only the last `OR`; each
+      // independent OR-condition needs its own array entry instead).
       AND: [
-        { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+        publicJobVisibilityWhere(),
         ...(keywords
           ? [
               {

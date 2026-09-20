@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
 
 export type PublicJobDetail = {
   id: string;
@@ -31,11 +32,12 @@ export type GetPublicJobBySlugOptions = {
 /**
  * Reads exactly one publicly publishable job for the job-detail page, by
  * country URL slug + job slug — never by internal id (see
- * docs/04-routing-and-url-strategy.md). Applies the same lifecycle rules
- * as getPublicJobs.ts (status = active, not soft-deleted, not past its
- * expiry date — see docs/18-job-lifecycle.md). Filtering by the job's
- * actual country relation, not just matching the slug, ensures a job
- * can never be reached through the wrong country's URL.
+ * docs/04-routing-and-url-strategy.md). Applies the exact same
+ * centralized public-visibility rule as getPublicJobs.ts (see
+ * publicJobVisibility.ts) — status = active, not soft-deleted, not past
+ * its expiry date, and not a known disposable test-fixture. Filtering by
+ * the job's actual country relation, not just matching the slug, ensures
+ * a job can never be reached through the wrong country's URL.
  *
  * Returns null when no such publishable job exists; the caller decides
  * what to do with that (this function never calls notFound() itself).
@@ -48,11 +50,7 @@ export async function getPublicJobBySlug(
 ): Promise<PublicJobDetail | null> {
   const job = await prisma.job.findFirst({
     where: {
-      slug: options.jobSlug,
-      status: "active",
-      deletedAt: null,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-      country: { urlSlug: options.countryUrlSlug },
+      AND: [publicJobVisibilityWhere(), { slug: options.jobSlug }, { country: { urlSlug: options.countryUrlSlug } }],
     },
     select: {
       id: true,

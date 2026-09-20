@@ -171,4 +171,103 @@ describe("getPublicJobs filters (real dev database, temporary fixtures)", () => 
     expect(resultIds).not.toContain(otherCountryJobId);
     expect(resultIds).not.toContain(otherCategoryJobId);
   });
+
+  describe("test-fixture exclusion", () => {
+    it("1. an active [IMPORT TEST] job is excluded from public results", async () => {
+      const job = await createTestJob(fixtures, { title: "[IMPORT TEST] Backend Engineer", status: "active" });
+      try {
+        const result = await getPublicJobs();
+        expect(ids(result)).not.toContain(job.id);
+      } finally {
+        await prisma.job.delete({ where: { id: job.id } });
+      }
+    });
+
+    it("2. an active [LOCATION REVIEW TEST] job is excluded from public results", async () => {
+      const job = await createTestJob(fixtures, { title: "[LOCATION REVIEW TEST] Backend Engineer", status: "active" });
+      try {
+        const result = await getPublicJobs();
+        expect(ids(result)).not.toContain(job.id);
+      } finally {
+        await prisma.job.delete({ where: { id: job.id } });
+      }
+    });
+
+    it("3. a legitimate 'Test Automation Engineer' job remains visible", async () => {
+      const job = await createTestJob(fixtures, { title: "Test Automation Engineer", status: "active" });
+      try {
+        const result = await getPublicJobs();
+        expect(ids(result)).toContain(job.id);
+      } finally {
+        await prisma.job.delete({ where: { id: job.id } });
+      }
+    });
+
+    it("4. a legitimate 'QA Test Engineer' job remains visible", async () => {
+      const job = await createTestJob(fixtures, { title: "QA Test Engineer", status: "active" });
+      try {
+        const result = await getPublicJobs();
+        expect(ids(result)).toContain(job.id);
+      } finally {
+        await prisma.job.delete({ where: { id: job.id } });
+      }
+    });
+
+    it("5. a legitimate 'Test Inspector' job remains visible", async () => {
+      const job = await createTestJob(fixtures, { title: "Test Inspector", status: "active" });
+      try {
+        const result = await getPublicJobs();
+        expect(ids(result)).toContain(job.id);
+      } finally {
+        await prisma.job.delete({ where: { id: job.id } });
+      }
+    });
+
+    it("6. keyword search for 'test' still surfaces legitimate titles containing it, and still excludes the fixture marker", async () => {
+      const legitimateJob = await createTestJob(fixtures, { title: "Test Inspector", status: "active" });
+      const fixtureJob = await createTestJob(fixtures, { title: "[IMPORT TEST] Backend Engineer", status: "active" });
+      try {
+        const result = await getPublicJobs({ keywords: "test" });
+        const resultIds = ids(result);
+        expect(resultIds).toContain(legitimateJob.id);
+        expect(resultIds).not.toContain(fixtureJob.id);
+      } finally {
+        await prisma.job.deleteMany({ where: { id: { in: [legitimateJob.id, fixtureJob.id] } } });
+      }
+    });
+
+    it("7. a rejected job remains hidden regardless of title", async () => {
+      const job = await createTestJob(fixtures, { title: "[AI MODERATION TEST] Rejected Job", status: "rejected" });
+      try {
+        const result = await getPublicJobs();
+        expect(ids(result)).not.toContain(job.id);
+      } finally {
+        await prisma.job.delete({ where: { id: job.id } });
+      }
+    });
+
+    it("8. an expired job remains hidden even with an otherwise-active status", async () => {
+      const job = await createTestJob(fixtures, {
+        title: "[AI MODERATION TEST] Expired Job",
+        status: "active",
+        expiresAt: new Date(Date.now() - 1000 * 60 * 60),
+      });
+      try {
+        const result = await getPublicJobs();
+        expect(ids(result)).not.toContain(job.id);
+      } finally {
+        await prisma.job.delete({ where: { id: job.id } });
+      }
+    });
+
+    it("9. a normal active job with no expiry remains visible (existing behavior unchanged)", async () => {
+      const job = await createTestJob(fixtures, { title: "[AI MODERATION TEST] Perfectly Normal Job", status: "active" });
+      try {
+        const result = await getPublicJobs();
+        expect(ids(result)).toContain(job.id);
+      } finally {
+        await prisma.job.delete({ where: { id: job.id } });
+      }
+    });
+  });
 });

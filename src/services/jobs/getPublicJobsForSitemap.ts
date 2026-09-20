@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
 
 export type SitemapJobEntry = {
   slug: string;
@@ -15,23 +16,15 @@ const SITEMAP_JOB_LIMIT = 5000;
  * Reads every currently publicly-visible job for sitemap.xml, in a
  * single query across all countries (never one query per country —
  * that would be N+1 across the country list). Applies the exact same
- * publish-visibility rule as src/services/jobs/getPublicJobs.ts
- * (status = active, not soft-deleted, not past expiry).
- *
- * This rule is intentionally duplicated here rather than importing
- * from getPublicJobs.ts: this task's scope is additive-only, and
- * refactoring the existing, working public listing query's internals
- * to share this logic was judged higher-risk than a few duplicated
- * lines of a rule that rarely changes. If the lifecycle rule changes,
- * both this file and getPublicJobs.ts need the same edit.
+ * centralized public-visibility rule as getPublicJobs.ts — see
+ * publicJobVisibility.ts, the one shared source of truth for this rule
+ * (status = active, not soft-deleted, not past expiry, not a known
+ * disposable test-fixture) — so a search engine can never index a
+ * leftover test job either.
  */
 export async function getPublicJobsForSitemap(): Promise<SitemapJobEntry[]> {
   const jobs = await prisma.job.findMany({
-    where: {
-      status: "active",
-      deletedAt: null,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-    },
+    where: publicJobVisibilityWhere(),
     select: {
       slug: true,
       updatedAt: true,
