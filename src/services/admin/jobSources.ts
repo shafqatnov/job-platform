@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { JobSourceType } from "@/generated/prisma/enums";
+import { detectJobSource, type JobSourceProvider } from "@/services/discovery/detectJobSource";
 
 /**
  * Read/write access to the Authorized Job Source registry — the
@@ -30,6 +31,13 @@ export type JobSourceRow = {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Derived at read time from baseEndpoint via detectJobSource — never
+   * persisted, never provider-specific logic living in this file. Purely
+   * a display aid so the registry's rows are understandable at a glance;
+   * this field has no effect on enable/disable or any connector.
+   */
+  provider: JobSourceProvider;
 };
 
 export async function listJobSources(): Promise<JobSourceRow[]> {
@@ -48,6 +56,7 @@ export async function listJobSources(): Promise<JobSourceRow[]> {
     notes: source.notes,
     createdAt: source.createdAt.toISOString(),
     updatedAt: source.updatedAt.toISOString(),
+    provider: source.baseEndpoint ? detectJobSource(source.baseEndpoint).provider : "unknown",
   }));
 }
 

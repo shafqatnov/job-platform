@@ -33,6 +33,7 @@ function JobSourceListItem({ source }: { source: JobSourceRow }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-foreground">{source.name}</span>
           <Badge variant="neutral">{SOURCE_TYPE_LABELS[source.sourceType]}</Badge>
+          {source.provider !== "unknown" ? <Badge variant="brand">{source.provider}</Badge> : null}
           <Badge variant={source.enabled ? "success" : "neutral"}>{source.enabled ? "Enabled" : "Disabled"}</Badge>
         </div>
         <span className="text-sm text-muted-foreground">
