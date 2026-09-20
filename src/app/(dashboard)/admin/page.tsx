@@ -4,6 +4,7 @@ import { Section } from "@/components/Section";
 import { Card } from "@/components/Card";
 import { getButtonClassName } from "@/components/Button";
 import { listAdminJobs } from "@/services/admin/listAdminJobs";
+import { listPendingImportedJobReviews } from "@/services/admin/listImportedJobReviews";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard",
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
 
 export default async function AdminDashboardPage() {
   const pendingJobs = await listAdminJobs({ status: "pending_review" });
+  const pendingImportedJobs = await listPendingImportedJobReviews();
 
   return (
     <Section aria-labelledby="admin-dashboard-heading">
@@ -46,6 +48,19 @@ export default async function AdminDashboardPage() {
             className={getButtonClassName({ variant: "outline", className: "self-start" })}
           >
             Manage job sources
+          </Link>
+        </Card>
+
+        <Card padding="lg" className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold text-foreground">Imported jobs</h2>
+          <p className="text-muted-foreground">
+            {pendingImportedJobs.length} imported {pendingImportedJobs.length === 1 ? "job needs" : "jobs need"} review.
+          </p>
+          <Link
+            href="/admin/imported-jobs"
+            className={getButtonClassName({ variant: "outline", className: "self-start" })}
+          >
+            Review imported jobs
           </Link>
         </Card>
       </div>

@@ -247,10 +247,13 @@ enum JobStatus {
   rejected
 }
 
-// Single value today, matching docs/17's "additive, not a retrofit" intent
-// for a future non-employer sourcing channel.
+// `imported` added by the imported-job publishing task — the
+// "future non-employer sourcing channel" this enum's own original
+// comment anticipated. Purely additive: existing employer-posted rows
+// keep `employer_direct`, and no existing code path's meaning changes.
 enum JobSource {
   employer_direct
+  imported
 }
 
 enum ApplicationMethod {
@@ -294,6 +297,20 @@ model Job {
   closedAt        DateTime?
   rejectionReason String?
 
+  // Imported-job provenance (publishing task). NULL for every
+  // employer-direct job — the unique constraint below allows unlimited
+  // NULL pairs (Postgres treats NULL as distinct in a unique index), so
+  // this adds zero constraint on existing/future employer-posted rows.
+  // Deliberately plain strings, not a foreign key to AuthorizedJobSource:
+  // this is provenance, not a hard relational dependency (a source
+  // config could be removed later without needing to touch already-
+  // published jobs). importedSourceUpdatedAt preserves the source's own
+  // last-updated timestamp (e.g. Greenhouse's `updated_at`), distinct
+  // from this row's own createdAt/updatedAt.
+  importedSourceId       String?
+  importedExternalJobId  String?
+  importedSourceUpdatedAt DateTime?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -309,8 +326,10 @@ model Job {
   applications      Application[]
   savedBy           SavedJob[]
   moderationActions ModerationAction[]
+  importedJobReview ImportedJobReview?
 
   @@unique([countryId, slug])
+  @@unique([importedSourceId, importedExternalJobId])
   @@index([countryId, status])
   @@index([status, expiresAt])
   @@index([companyId])
@@ -455,4 +474,63 @@ model AuthorizedJobSource {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// The admin review queue/audit trail for the imported-job publishing
+// pipeline — deliberately a SEPARATE model from Job, per this task's own
+// instruction to keep pending/rejected imported records out of the
+// public Job table entirely. Every processed imported job gets exactly
+// one row here (one per (importedSourceId, importedExternalJobId)),
+// regardless of its outcome:
+//   - auto_publish  -> status "published", publishedJobId set immediately
+//   - admin_review  -> status "pending" until an admin approves/rejects
+//   - do_not_publish -> status "rejected" immediately (auditable, never silently discarded)
+// `decision` preserves the confidence-decision stage's original verdict
+// forever, even after a human later changes `status` — so "what did the
+// engine originally recommend" is never lost. Human admin actions
+// (approve/reject) are logged via the EXISTING ModerationAction table,
+// not duplicated here, since that is already this codebase's one
+// audit-log convention for "an admin did X."
+enum ImportedJobReviewStatus {
+  pending
+  published
+  rejected
+}
+
+model ImportedJobReview {
+  id String @id @default(uuid())
+
+  importedSourceId      String
+  importedExternalJobId String
+
+  // A read-only snapshot of the fields an admin needs to review this
+  // job, captured at import time — never re-fetched from the source,
+  // never mutated after creation (updating a pending item's own content
+  // is out of scope for this task; only `status`/`publishedJobId`
+  // change over this row's lifetime).
+  title           String
+  description     String
+  companyIdentity String?
+  location        String?
+  sourceUrl       String?
+  category        String?
+  country         String?
+  city            String?
+
+  // The confidence-decision stage's original verdict + machine-readable
+  // reason codes — see decideImportedJobConfidence.ts. `decision` is
+  // free text matching ModerationAction.action's existing convention.
+  decision String
+  reasons  String[]
+
+  status          ImportedJobReviewStatus @default(pending)
+  publishedJobId  String?                 @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  publishedJob Job? @relation(fields: [publishedJobId], references: [id])
+
+  @@index([importedSourceId, importedExternalJobId])
+  @@index([status])
 }
