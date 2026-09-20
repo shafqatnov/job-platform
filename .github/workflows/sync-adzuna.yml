@@ -1,0 +1,52 @@
+name: Sync Adzuna Jobs
+
+# Free GitHub Actions scheduler for the existing, already-protected
+# /api/cron/sync-adzuna endpoint — replaces the Vercel Cron entry that
+# was removed from vercel.json (the Vercel project is on the Hobby
+# plan, which only permits once-daily schedules; this repo-level
+# scheduler has no such restriction and costs nothing extra).
+#
+# This workflow does NOT contain any Adzuna/OpenAI logic and never
+# touches the Adzuna or OpenAI API credentials — those stay server-side
+# on Vercel only. The workflow's only job is to send an authenticated
+# HTTP request to the server; the server's own existing gates (the
+# trigger secret below, then syncAdzunaJobs's own
+# authorizationStatus/enabled checks) decide everything else, exactly
+# as they already do for any other caller.
+on:
+  schedule:
+    # Every 6 hours, on the hour. Never run on push.
+    - cron: "0 */6 * * *"
+  workflow_dispatch: {}
+
+# Prevents two Adzuna sync runs from ever overlapping: if a new run
+# (scheduled or manual) starts while a previous one is still in
+# progress, the previous one is cancelled rather than letting both run
+# concurrently against the same server endpoint.
+concurrency:
+  group: sync-adzuna
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the protected Adzuna sync endpoint
+        env:
+          ADZUNA_SYNC_TRIGGER_SECRET: ${{ secrets.ADZUNA_SYNC_TRIGGER_SECRET }}
+        run: |
+          set -u
+          http_status=$(curl -sS -o /tmp/response.json -w "%{http_code}" \
+            --max-time 600 \
+            -X POST \
+            -H "Authorization: Bearer ${ADZUNA_SYNC_TRIGGER_SECRET}" \
+            https://www.jobnura.com/api/cron/sync-adzuna)
+
+          echo "HTTP status: ${http_status}"
+          echo "Response body:"
+          cat /tmp/response.json
+
+          if [ "${http_status}" -lt 200 ] || [ "${http_status}" -ge 300 ]; then
+            echo "Adzuna sync request did not succeed (HTTP ${http_status})."
+            exit 1
+          fi
