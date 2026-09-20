@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { slugify } from "@/utils/slugify";
 import { approveJob } from "@/services/admin/moderateJob";
+import { findResolvedLocationAlias } from "@/services/jobs/referenceData";
 import type { ValidatableRawJob } from "@/services/validation/validateImportedJob";
 import type { NormalizeImportedJobResult } from "@/services/ai/normalizeImportedJob";
 import type { ImportedJobDecision } from "@/services/decision/decideImportedJobConfidence";
@@ -144,6 +145,49 @@ async function getOrCreateImportedCompany(companyName: string): Promise<string> 
   }
 }
 
+type ResolvedLocation = { countryId: string; cityId: string };
+
+/**
+ * Resolves an imported job's country and city to real reference-data
+ * rows. Tries the AI-produced country/city names against the real
+ * Country/City tables first — the normal path for a job whose location
+ * text AI could already parse cleanly. If that fails (or AI couldn't
+ * produce a country/city at all), falls back to a previously
+ * admin-resolved mapping for this exact raw source location text (see
+ * the ResolvedLocationAlias table and src/services/admin/locationReviews.ts)
+ * so the same unrecognized location text never needs a second human
+ * review. Returns null when neither path resolves both a country AND a
+ * city — the caller then routes the job to the unknown-location review
+ * queue rather than ever guessing or inventing a Country/City row.
+ */
+async function resolveCountryAndCity(
+  aiCountryName: string | null,
+  aiCityName: string | null,
+  rawLocationText: string | null
+): Promise<ResolvedLocation | null> {
+  if (aiCountryName && aiCityName) {
+    const country = await prisma.country.findFirst({ where: { name: aiCountryName }, select: { id: true } });
+    if (country) {
+      const city = await prisma.city.findFirst({
+        where: { name: { equals: aiCityName, mode: "insensitive" }, countryId: country.id },
+        select: { id: true },
+      });
+      if (city) {
+        return { countryId: country.id, cityId: city.id };
+      }
+    }
+  }
+
+  if (rawLocationText) {
+    const alias = await findResolvedLocationAlias(rawLocationText);
+    if (alias && alias.cityId) {
+      return { countryId: alias.countryId, cityId: alias.cityId };
+    }
+  }
+
+  return null;
+}
+
 type ImportedJobReviewRow = Awaited<ReturnType<typeof prisma.importedJobReview.findFirst>>;
 
 function reviewStatusForDecision(decision: ImportedJobDecision["decision"]): "pending" | "rejected" {
@@ -244,7 +288,7 @@ async function publishReview(
   // not correspond to any real City row. If any required field can't be
   // resolved, this NEVER invents a fallback — it safely routes the job
   // to admin review instead, preserving the original decision for history.
-  if (!aiResult.category || !aiResult.country || !aiResult.city || !rawJob.companyIdentity) {
+  if (!aiResult.category || !rawJob.companyIdentity) {
     await prisma.importedJobReview.update({
       where: { id: review.id },
       data: { status: "pending", reasons: { push: "unresolvable_required_field" } },
@@ -252,11 +296,8 @@ async function publishReview(
     return { outcome: "queued_for_review", reviewId: review.id };
   }
 
-  const [category, country] = await Promise.all([
-    prisma.category.findFirst({ where: { name: aiResult.category }, select: { id: true } }),
-    prisma.country.findFirst({ where: { name: aiResult.country }, select: { id: true } }),
-  ]);
-  if (!category || !country) {
+  const category = await prisma.category.findFirst({ where: { name: aiResult.category }, select: { id: true } });
+  if (!category) {
     await prisma.importedJobReview.update({
       where: { id: review.id },
       data: { status: "pending", reasons: { push: "unresolvable_required_field" } },
@@ -264,17 +305,26 @@ async function publishReview(
     return { outcome: "queued_for_review", reviewId: review.id };
   }
 
-  const city = await prisma.city.findFirst({
-    where: { name: { equals: aiResult.city, mode: "insensitive" }, countryId: country.id },
-    select: { id: true },
-  });
-  if (!city) {
+  // A location AI couldn't confidently map (and that no prior admin
+  // resolution covers) is routed to the dedicated unknown-location
+  // review queue via locationReviewStatus — distinct from the other
+  // unresolvable-field cases above, which have no such queue. This
+  // review row's OWN resolvedCountryId/resolvedCityId (set by an admin
+  // via resolveLocationReview) take priority when present — the most
+  // specific, directly-authoritative source — ahead of the AI-name
+  // lookup and the raw-text alias fallback inside resolveCountryAndCity.
+  const resolvedLocation: ResolvedLocation | null =
+    review.resolvedCountryId && review.resolvedCityId
+      ? { countryId: review.resolvedCountryId, cityId: review.resolvedCityId }
+      : await resolveCountryAndCity(aiResult.country, aiResult.city, rawJob.location);
+  if (!resolvedLocation) {
     await prisma.importedJobReview.update({
       where: { id: review.id },
-      data: { status: "pending", reasons: { push: "unresolvable_required_field" } },
+      data: { status: "pending", locationReviewStatus: "pending", reasons: { push: "unresolvable_required_field" } },
     });
     return { outcome: "queued_for_review", reviewId: review.id };
   }
+  const { countryId, cityId } = resolvedLocation;
 
   const [companyId, systemUserId] = await Promise.all([
     getOrCreateImportedCompany(rawJob.companyIdentity),
@@ -285,7 +335,7 @@ async function publishReview(
   let slug = baseSlug;
   let attempt = 1;
   while (attempt <= MAX_SLUG_ATTEMPTS) {
-    const collision = await prisma.job.findFirst({ where: { countryId: country.id, slug }, select: { id: true } });
+    const collision = await prisma.job.findFirst({ where: { countryId, slug }, select: { id: true } });
     if (!collision) break;
     attempt += 1;
     slug = `${baseSlug}-${attempt}`;
@@ -299,8 +349,8 @@ async function publishReview(
     job = await prisma.job.create({
       data: {
         companyId,
-        countryId: country.id,
-        cityId: city.id,
+        countryId,
+        cityId,
         categoryId: category.id,
         postedByUserId: systemUserId,
         title: aiResult.normalizedTitle,
@@ -439,8 +489,13 @@ export async function approveImportedJobReview(
   // re-fetches from Greenhouse or re-runs AI here (publishing must not
   // call OpenAI). This IS "re-check the job has not become invalid since
   // import": missing required fields on the snapshot are caught the same
-  // way a fresh import would be.
-  if (!review.title.trim() || !review.companyIdentity || !review.category || !review.country || !review.city) {
+  // way a fresh import would be. country/city are deliberately NOT
+  // required here (unlike the other fields) — a review with no AI
+  // country/city can still be publishable if an admin has since resolved
+  // its raw location text via the unknown-location review queue;
+  // publishReview's own resolveCountryAndCity re-checks that and safely
+  // re-queues the review if the location genuinely still can't be resolved.
+  if (!review.title.trim() || !review.companyIdentity || !review.category) {
     return { outcome: "failed", error: "This imported job is missing required information and cannot be published." };
   }
 

@@ -6,7 +6,9 @@ import {
   findCountryByIsoCode,
   findCountryByName,
   findCityInCountry,
+  findResolvedLocationAlias,
   listCountries,
+  normalizeLocationText,
   resolveCountryIdentifier,
 } from "@/services/jobs/referenceData";
 import { COUNTRY_ALIASES } from "@/constants/countryAliases";
@@ -224,5 +226,22 @@ describe("referenceData: canonical country/city resolution (real dev database)",
     const matchedCodes = new Set(matches.map((c) => c.isoCode));
     const missing = uniqueIsoCodes.filter((code) => !matchedCodes.has(code));
     expect(missing, `alias target ISO codes with no matching Country row: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  describe("normalizeLocationText / findResolvedLocationAlias", () => {
+    it("normalizes casing and surrounding whitespace identically", () => {
+      expect(normalizeLocationText("  Islamabad, Pakistan  ")).toBe("islamabad, pakistan");
+      expect(normalizeLocationText("ISLAMABAD, PAKISTAN")).toBe("islamabad, pakistan");
+    });
+
+    it("a raw location text with no prior admin resolution returns null, never a guess", async () => {
+      const result = await findResolvedLocationAlias(`Never Reviewed Location ${crypto.randomUUID()}`);
+      expect(result).toBeNull();
+    });
+
+    it("an empty/whitespace-only location text returns null without querying for an empty key", async () => {
+      const result = await findResolvedLocationAlias("   ");
+      expect(result).toBeNull();
+    });
   });
 });

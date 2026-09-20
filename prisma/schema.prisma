@@ -145,6 +145,8 @@ model Country {
   companies         Company[]
   candidateProfiles CandidateProfile[]
   jobs              Job[]
+  resolvedImportedJobReviews ImportedJobReview[]     @relation("ImportedJobReviewResolvedCountry")
+  resolvedLocationAliases    ResolvedLocationAlias[] @relation("ResolvedLocationAliasCountry")
 }
 
 // Not defined as its own entity in docs/26 (§13 only mentions a
@@ -165,6 +167,8 @@ model City {
   country           Country            @relation(fields: [countryId], references: [id])
   candidateProfiles CandidateProfile[]
   jobs              Job[]
+  resolvedImportedJobReviews ImportedJobReview[]     @relation("ImportedJobReviewResolvedCity")
+  resolvedLocationAliases    ResolvedLocationAlias[] @relation("ResolvedLocationAliasCity")
 
   @@unique([countryId, slug])
 }
@@ -551,11 +555,56 @@ model ImportedJobReview {
   status          ImportedJobReviewStatus @default(pending)
   publishedJobId  String?                 @unique
 
+  // The unknown-location review sub-workflow. Null (the default for
+  // every existing/new row) means this review never had an unresolved
+  // location — most rows. Distinct from `status` above, which tracks
+  // publish/reject of the WHOLE job: a job can be "pending" overall
+  // while ALSO carrying a pending location review; resolving the
+  // location does not itself publish the job, it only unblocks a future
+  // publish attempt. Admin decisions here are logged via the existing
+  // ModerationAction table (actions "resolve_location_review" /
+  // "reject_location_review"), matching this file's own
+  // approve/reject-imported-job convention — no separate
+  // reviewedByUserId field is duplicated here.
+  locationReviewStatus LocationReviewStatus?
+  resolvedCountryId    String?
+  resolvedCityId       String?
+  locationReviewedAt   DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  publishedJob Job? @relation(fields: [publishedJobId], references: [id])
+  publishedJob    Job?     @relation(fields: [publishedJobId], references: [id])
+  resolvedCountry Country? @relation("ImportedJobReviewResolvedCountry", fields: [resolvedCountryId], references: [id])
+  resolvedCity    City?    @relation("ImportedJobReviewResolvedCity", fields: [resolvedCityId], references: [id])
 
   @@index([importedSourceId, importedExternalJobId])
   @@index([status])
+  @@index([locationReviewStatus])
+}
+
+enum LocationReviewStatus {
+  pending
+  resolved
+  rejected
+}
+
+// Persisted knowledge from a completed unknown-location admin review:
+// the next time this exact raw source location text is seen, the
+// pipeline reuses this mapping instead of creating another review item.
+// Keyed on the raw text (trimmed + lowercased identically on write and
+// read) rather than a guessed normalization scheme. AI output can never
+// write to this table directly — only an admin's explicit resolution
+// (via resolveLocationReview) creates a row here.
+model ResolvedLocationAlias {
+  id              String  @id @default(uuid())
+  normalizedAlias String  @unique
+  countryId       String
+  cityId          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  country Country @relation("ResolvedLocationAliasCountry", fields: [countryId], references: [id])
+  city    City?   @relation("ResolvedLocationAliasCity", fields: [cityId], references: [id])
 }

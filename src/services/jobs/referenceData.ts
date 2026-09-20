@@ -94,6 +94,34 @@ export async function findCountryByName(name: string): Promise<CountryOption | n
  * matching always happens first, and only a null result should ever be
  * escalated to a human/admin review or an AI-assisted stage.
  */
+/** Trims and lowercases raw source location text so the exact same text always maps to the exact same alias key, regardless of casing/whitespace. */
+export function normalizeLocationText(rawLocationText: string): string {
+  return rawLocationText.trim().toLowerCase();
+}
+
+export type ResolvedLocationAliasResult = { countryId: string; cityId: string | null };
+
+/**
+ * Looks up a previously admin-resolved mapping for a raw, free-text
+ * source location string (e.g. "Islamabad, Pakistan") — the persisted
+ * knowledge from a completed unknown-location review (see
+ * src/services/admin/locationReviews.ts). Read-only; never creates a
+ * row. Returns null when this exact text has never been resolved
+ * before, which is the normal case for anything not previously reviewed.
+ */
+export async function findResolvedLocationAlias(rawLocationText: string): Promise<ResolvedLocationAliasResult | null> {
+  const normalizedAlias = normalizeLocationText(rawLocationText);
+  if (!normalizedAlias) {
+    return null;
+  }
+
+  const alias = await prisma.resolvedLocationAlias.findUnique({
+    where: { normalizedAlias },
+    select: { countryId: true, cityId: true },
+  });
+  return alias ? { countryId: alias.countryId, cityId: alias.cityId } : null;
+}
+
 export async function resolveCountryIdentifier(input: string): Promise<CountryOption | null> {
   const trimmed = input.trim();
   if (!trimmed) {
