@@ -190,11 +190,39 @@ describe("referenceData: canonical country/city resolution (real dev database)",
     expect(await prisma.company.count()).toBe(companyCountBefore);
   });
 
-  it("every alias value in the alias map resolves to a real, existing Country row", async () => {
-    const uniqueIsoCodes = new Set(Object.values(COUNTRY_ALIASES));
-    for (const isoCode of uniqueIsoCodes) {
-      const country = await findCountryByIsoCode(isoCode);
-      expect(country, `alias target ISO code "${isoCode}" should resolve to a real Country row`).not.toBeNull();
+  it("6. several previously-missing global countries now resolve correctly", async () => {
+    const cases: Array<[string, string]> = [
+      ["India", "IN"],
+      ["Saudi Arabia", "SA"],
+      ["Qatar", "QA"],
+      ["Oman", "OM"],
+      ["Norway", "NO"],
+      ["Brazil", "BR"],
+      ["South Africa", "ZA"],
+      ["Indonesia", "ID"],
+      ["Japan", "JP"],
+    ];
+    for (const [name, isoCode] of cases) {
+      const byName = await resolveCountryIdentifier(name);
+      const byCode = await findCountryByIsoCode(isoCode);
+      expect(byName?.id, `${name} should resolve by name`).toBeTruthy();
+      expect(byName?.id, `${name} and ${isoCode} should be the same canonical row`).toBe(byCode?.id);
     }
+  });
+
+  it("6b. total canonical country count reflects full ISO 3166-1 coverage, not just the original set", async () => {
+    const countries = await listCountries();
+    expect(countries.length).toBeGreaterThan(200);
+  });
+
+  it("every alias value in the alias map resolves to a real, existing Country row", async () => {
+    const uniqueIsoCodes = [...new Set(Object.values(COUNTRY_ALIASES))];
+    const matches = await prisma.country.findMany({
+      where: { isoCode: { in: uniqueIsoCodes } },
+      select: { isoCode: true },
+    });
+    const matchedCodes = new Set(matches.map((c) => c.isoCode));
+    const missing = uniqueIsoCodes.filter((code) => !matchedCodes.has(code));
+    expect(missing, `alias target ISO codes with no matching Country row: ${missing.join(", ")}`).toEqual([]);
   });
 });
