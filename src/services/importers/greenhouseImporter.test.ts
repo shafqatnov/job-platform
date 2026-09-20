@@ -29,6 +29,9 @@ function makeSource(overrides: Partial<JobSourceRow> = {}): JobSourceRow {
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     provider: "greenhouse",
+    authorizationStatus: "verified",
+    authorizationVerifiedAt: "2026-01-01T00:00:00.000Z",
+    authorizationReference: null,
     ...overrides,
   };
 }

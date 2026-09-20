@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { listJobSources, setJobSourceEnabled } from "@/services/admin/jobSources";
+import { listJobSources, setJobSourceEnabled, setJobSourceAuthorization } from "@/services/admin/jobSources";
 
 const TEST_LABEL_PREFIX = "[JOB SOURCE TEST]";
 
@@ -33,8 +33,8 @@ describe("jobSources (real dev database, temporary fixtures)", () => {
     expect(sources.some((row) => row.id === source.id)).toBe(true);
   });
 
-  it("3. admin can enable a disabled source", async () => {
-    const source = await createTestSource({ enabled: false });
+  it("3. admin can enable a disabled, authorization-verified source", async () => {
+    const source = await createTestSource({ enabled: false, authorizationStatus: "verified" });
 
     const result = await setJobSourceEnabled(source.id, true);
 
@@ -50,7 +50,7 @@ describe("jobSources (real dev database, temporary fixtures)", () => {
   });
 
   it("4. the enabled state persists and is reflected on the next read", async () => {
-    const source = await createTestSource({ enabled: false });
+    const source = await createTestSource({ enabled: false, authorizationStatus: "verified" });
 
     await setJobSourceEnabled(source.id, true);
     const sources = await listJobSources();
@@ -90,7 +90,7 @@ describe("jobSources (real dev database, temporary fixtures)", () => {
   });
 
   it("6. multiple sources remain independent — enabling one never affects another", async () => {
-    const sourceA = await createTestSource({ enabled: false });
+    const sourceA = await createTestSource({ enabled: false, authorizationStatus: "verified" });
     const sourceB = await createTestSource({ enabled: false });
 
     await setJobSourceEnabled(sourceA.id, true);
@@ -113,5 +113,107 @@ describe("jobSources (real dev database, temporary fixtures)", () => {
     const result = await setJobSourceEnabled("00000000-0000-0000-0000-000000000000", true);
 
     expect(result).toEqual({ success: false, error: "Job source not found." });
+  });
+
+  describe("authorization gate", () => {
+    it("1. an unverified source cannot be enabled", async () => {
+      const source = await createTestSource({ enabled: false, authorizationStatus: "unverified" });
+
+      const result = await setJobSourceEnabled(source.id, true);
+
+      expect(result.success).toBe(false);
+      const row = await prisma.authorizedJobSource.findUniqueOrThrow({ where: { id: source.id } });
+      expect(row.enabled).toBe(false);
+    });
+
+    it("2. a verified source can be enabled", async () => {
+      const source = await createTestSource({ enabled: false, authorizationStatus: "verified" });
+
+      const result = await setJobSourceEnabled(source.id, true);
+
+      expect(result).toEqual({ success: true });
+    });
+
+    it("3. an unverified source remains disabled after a rejected enable attempt", async () => {
+      const source = await createTestSource({ enabled: false, authorizationStatus: "unverified" });
+
+      await setJobSourceEnabled(source.id, true);
+
+      const row = await prisma.authorizedJobSource.findUniqueOrThrow({ where: { id: source.id } });
+      expect(row.enabled).toBe(false);
+    });
+
+    it("4. attempting to enable an unverified source returns a safe, specific error", async () => {
+      const source = await createTestSource({ enabled: false, authorizationStatus: "unverified" });
+
+      const result = await setJobSourceEnabled(source.id, true);
+
+      expect(result).toEqual({
+        success: false,
+        error: "This source's usage authorization has not been verified yet. Mark it as verified before enabling it.",
+      });
+    });
+
+    it("7. marking a source verified records a verification timestamp", async () => {
+      const source = await createTestSource({ authorizationStatus: "unverified" });
+
+      const result = await setJobSourceAuthorization(source.id, true, "Employer confirmed permission by email");
+
+      expect(result).toEqual({ success: true });
+      const row = await prisma.authorizedJobSource.findUniqueOrThrow({ where: { id: source.id } });
+      expect(row.authorizationStatus).toBe("verified");
+      expect(row.authorizationVerifiedAt).not.toBeNull();
+      expect(row.authorizationReference).toBe("Employer confirmed permission by email");
+    });
+
+    it("8. marking a verified source unverified clears the verification timestamp and disables it", async () => {
+      const source = await createTestSource({ authorizationStatus: "verified", authorizationVerifiedAt: new Date(), enabled: true });
+
+      const result = await setJobSourceAuthorization(source.id, false, null);
+
+      expect(result).toEqual({ success: true });
+      const row = await prisma.authorizedJobSource.findUniqueOrThrow({ where: { id: source.id } });
+      expect(row.authorizationStatus).toBe("unverified");
+      expect(row.authorizationVerifiedAt).toBeNull();
+      expect(row.enabled).toBe(false);
+    });
+
+    it("9. unrelated source configuration (name, sourceType, baseEndpoint) is untouched by an authorization change", async () => {
+      const source = await createTestSource({
+        name: `${TEST_LABEL_PREFIX} Config Preserved ${crypto.randomUUID().slice(0, 8)}`,
+        baseEndpoint: "https://example-source.invalid/jobs",
+      });
+
+      await setJobSourceAuthorization(source.id, true, "test reference");
+
+      const row = await prisma.authorizedJobSource.findUniqueOrThrow({ where: { id: source.id } });
+      expect(row.name).toBe(source.name);
+      expect(row.baseEndpoint).toBe("https://example-source.invalid/jobs");
+      expect(row.sourceType).toBe(source.sourceType);
+    });
+
+    it("returns a safe error rather than throwing when authorizing a nonexistent source", async () => {
+      const result = await setJobSourceAuthorization("00000000-0000-0000-0000-000000000000", true, null);
+
+      expect(result).toEqual({ success: false, error: "Job source not found." });
+    });
+
+    it("a reference note is never required to mark a source verified", async () => {
+      const source = await createTestSource();
+
+      const result = await setJobSourceAuthorization(source.id, true, null);
+
+      expect(result).toEqual({ success: true });
+    });
+
+    it("authorization reference is stored independently of credentialEnvVarName — the two are never conflated", async () => {
+      const source = await createTestSource({ credentialEnvVarName: null });
+
+      await setJobSourceAuthorization(source.id, true, "Employer emailed written approval on file");
+      const row = await prisma.authorizedJobSource.findUniqueOrThrow({ where: { id: source.id } });
+
+      expect(row.authorizationReference).toBe("Employer emailed written approval on file");
+      expect(row.credentialEnvVarName).toBeNull();
+    });
   });
 });

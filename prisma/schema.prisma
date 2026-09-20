@@ -444,6 +444,19 @@ enum JobSourceType {
   OFFICIAL_CAREER_SOURCE
 }
 
+// Whether the source owner has explicitly authorized Jobnura to use/
+// redistribute their job data — deliberately separate from, and never
+// inferred from, technical facts like "the endpoint is public" or "the
+// API responds without credentials". Only two states: an authorization
+// either has been explicitly recorded, or it hasn't. No third
+// "pending"/"in review" state was added — this task's own instruction
+// was the smallest explicit representation, and nothing today reads or
+// needs a richer workflow state.
+enum JobSourceAuthorizationStatus {
+  unverified
+  verified
+}
+
 model AuthorizedJobSource {
   id         String        @id @default(uuid())
   name       String        @unique
@@ -456,6 +469,18 @@ model AuthorizedJobSource {
 
   enabled             Boolean @default(false)
   attributionRequired Boolean @default(true)
+
+  // Defaults to "unverified" for every source, including ones that are
+  // already `enabled` at migration time (none exist today, but this
+  // guarantees no future row silently starts authorized). Becoming
+  // `enabled: true` requires `authorizationStatus === "verified"` —
+  // enforced server-side in setJobSourceEnabled, not just hidden in the
+  // UI. authorizationReference is a short, non-sensitive note (e.g.
+  // "Employer provided approved RaaS feed") — never credentials, never
+  // legal documents, never email contents.
+  authorizationStatus     JobSourceAuthorizationStatus @default(unverified)
+  authorizationVerifiedAt DateTime?
+  authorizationReference  String?
 
   // Null means "no polling configured" — most sources start this way
   // since no connector exists yet to poll on a schedule.
