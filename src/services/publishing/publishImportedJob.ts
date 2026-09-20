@@ -195,6 +195,41 @@ function reviewStatusForDecision(decision: ImportedJobDecision["decision"]): "pe
 }
 
 /**
+ * For a job routed to the general admin_review queue — for ANY reason
+ * (possible duplicate, weak/poor quality, uncertain category, OR a
+ * genuinely uncertain location) — this also independently checks right
+ * now whether its location happens to already be resolvable, via a real
+ * AI-matched country/city or a previously admin-approved
+ * ResolvedLocationAlias for its exact raw source text. Without this,
+ * only auto_publish/admin-approved jobs ever reached resolveCountryAndCity
+ * (inside publishReview), so a genuinely unknown location never surfaced
+ * in the dedicated Unknown Location Review queue until an admin happened
+ * to open the general queue and click Approve, and a location an admin
+ * had already resolved was never reused automatically for a job that
+ * landed in admin_review for an unrelated reason. Never touches a review
+ * whose location an admin has already decided (locationReviewStatus
+ * already "resolved"/"rejected") — those are admin-authoritative.
+ */
+async function refreshLocationReviewStatus(
+  review: NonNullable<ImportedJobReviewRow>,
+  rawJob: ValidatableRawJob,
+  normalization: NormalizeImportedJobResult
+): Promise<void> {
+  if (review.locationReviewStatus === "resolved" || review.locationReviewStatus === "rejected") {
+    return;
+  }
+  if (!normalization.ok) {
+    return;
+  }
+
+  const resolved = await resolveCountryAndCity(normalization.result.country, normalization.result.city, rawJob.location);
+  const nextStatus = resolved ? null : "pending";
+  if (nextStatus !== review.locationReviewStatus) {
+    await prisma.importedJobReview.update({ where: { id: review.id }, data: { locationReviewStatus: nextStatus } });
+  }
+}
+
+/**
  * Finds the existing review row for this exact external job if one
  * exists (idempotent across repeated importer runs on the same job), or
  * creates a fresh one otherwise. Never creates a second row for the same
@@ -446,6 +481,7 @@ export async function ingestImportedJob(input: PublishImportedJobInput): Promise
     if (review.decision === "auto_publish") {
       return publishReview(review, input.rawJob, input.normalization, null);
     }
+    await refreshLocationReviewStatus(review, input.rawJob, input.normalization);
     return { outcome: "queued_for_review", reviewId: review.id };
   }
 
@@ -453,6 +489,7 @@ export async function ingestImportedJob(input: PublishImportedJobInput): Promise
     return { outcome: "rejected", reviewId: review.id };
   }
   if (input.decision.decision === "admin_review") {
+    await refreshLocationReviewStatus(review, input.rawJob, input.normalization);
     return { outcome: "queued_for_review", reviewId: review.id };
   }
 
