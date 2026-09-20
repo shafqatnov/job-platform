@@ -36,6 +36,7 @@ export const COUNTRIES: CountryOption[] = [
   { code: "kr", slug: "kr", name: "South Korea" },
   { code: "hk", slug: "hk", name: "Hong Kong" },
   { code: "il", slug: "il", name: "Israel" },
+  { code: "pk", slug: "pk", name: "Pakistan" },
 ];
 
 /** Looks up a country by its internal ISO code (case-insensitive). */

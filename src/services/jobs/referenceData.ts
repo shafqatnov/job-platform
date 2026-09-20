@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { COUNTRY_ALIASES } from "@/constants/countryAliases";
 
 export type CountryOption = { id: string; slug: string; name: string };
 export type CategoryOption = { id: string; slug: string; name: string };
@@ -61,4 +62,56 @@ export async function findCityInCountry(slug: string, countryId: string): Promis
     select: { id: true, slug: true, name: true, countryId: true },
   });
   return city;
+}
+
+/** Looks up a country by its ISO 3166-1 alpha-2 code (case-insensitive). */
+export async function findCountryByIsoCode(isoCode: string): Promise<CountryOption | null> {
+  const country = await prisma.country.findFirst({
+    where: { isoCode: { equals: isoCode.trim(), mode: "insensitive" }, isActive: true },
+    select: { id: true, urlSlug: true, name: true },
+  });
+  return country ? { id: country.id, slug: country.urlSlug, name: country.name } : null;
+}
+
+/** Looks up a country by its exact canonical display name (case-insensitive). */
+export async function findCountryByName(name: string): Promise<CountryOption | null> {
+  const country = await prisma.country.findFirst({
+    where: { name: { equals: name.trim(), mode: "insensitive" }, isActive: true },
+    select: { id: true, urlSlug: true, name: true },
+  });
+  return country ? { id: country.id, slug: country.urlSlug, name: country.name } : null;
+}
+
+/**
+ * The main deterministic country resolver for free-text location input
+ * (e.g. from an imported job source). Tries, in order: an exact ISO
+ * alpha-2 match against real Country rows, the fixed alias map
+ * (ISO alpha-3 codes and common name variants — see
+ * countryAliases.ts) resolved back to a real Country row, then an exact
+ * canonical-name match. Returns null ("unresolved") rather than ever
+ * guessing, inventing, or creating a country — this function performs
+ * no database write, and it is never routed through AI: deterministic
+ * matching always happens first, and only a null result should ever be
+ * escalated to a human/admin review or an AI-assisted stage.
+ */
+export async function resolveCountryIdentifier(input: string): Promise<CountryOption | null> {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const byIsoCode = await findCountryByIsoCode(trimmed);
+  if (byIsoCode) {
+    return byIsoCode;
+  }
+
+  const aliasedIsoCode = COUNTRY_ALIASES[trimmed.toLowerCase()];
+  if (aliasedIsoCode) {
+    const byAlias = await findCountryByIsoCode(aliasedIsoCode);
+    if (byAlias) {
+      return byAlias;
+    }
+  }
+
+  return findCountryByName(trimmed);
 }
