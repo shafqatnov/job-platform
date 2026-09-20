@@ -47,6 +47,13 @@ describe("detectJobSource", () => {
     expect(result.confidence).toBe("high");
   });
 
+  it("4b. a known Adzuna API URL detects as adzuna", () => {
+    const result = detectJobSource("https://api.adzuna.com/v1/api/jobs/gb/search/1");
+    expect(result.provider).toBe("adzuna");
+    expect(result.sourceType).toBe("API");
+    expect(result.confidence).toBe("high");
+  });
+
   it("5. a known Workable URL detects as workable", () => {
     const result = detectJobSource("https://apply.workable.com/acme-co/");
     expect(result.provider).toBe("workable");

@@ -52,6 +52,10 @@
  *  - Workable: a live `apply.workable.com/workable/` board page, plus
  *    https://workable.readme.io/ (official API docs)
  *  - Teamtailor: https://docs.teamtailor.com/
+ *  - Adzuna: confirmed via a real, successful live call to
+ *    https://api.adzuna.com/v1/api/jobs/{country}/search/{page}
+ *    (a genuinely stronger verification than "official docs" alone —
+ *    this hostname was observed actually working, not just documented).
  * ---------------------------------------------------------------------
  */
 
@@ -63,6 +67,7 @@ export type JobSourceProvider =
   | "workable"
   | "teamtailor"
   | "recruitee"
+  | "adzuna"
   | "unknown";
 
 export type DetectedSourceType = "ATS" | "FEED" | "API" | "OFFICIAL_CAREER_SOURCE" | "UNKNOWN";
@@ -156,6 +161,16 @@ export function detectJobSource(input: string): JobSourceDetectionResult {
       confidence: "high",
       normalizedEndpoint,
       reason: "Matched Ashby's verified public job-board hostname.",
+    };
+  }
+
+  if (hostname === "api.adzuna.com") {
+    return {
+      provider: "adzuna",
+      sourceType: "API",
+      confidence: "high",
+      normalizedEndpoint,
+      reason: "Matched Adzuna's verified public Jobs API hostname (confirmed via a real, successful live API call).",
     };
   }
 
