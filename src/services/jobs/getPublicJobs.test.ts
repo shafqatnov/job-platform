@@ -270,4 +270,36 @@ describe("getPublicJobs filters (real dev database, temporary fixtures)", () => 
       }
     });
   });
+
+  describe("Adzuna attribution flag", () => {
+    it("a job imported from the real Adzuna source is flagged isAdzunaSourced", async () => {
+      const adzunaSource = await prisma.authorizedJobSource.findUnique({ where: { name: "Adzuna" }, select: { id: true } });
+      if (!adzunaSource) {
+        // The Adzuna registry row is expected to exist in this
+        // codebase's DB; skip gracefully rather than failing a
+        // seed-data assumption this test doesn't own.
+        return;
+      }
+      const job = await createTestJob(fixtures, { title: "[AI MODERATION TEST] Adzuna-Sourced Job", status: "active" });
+      await prisma.job.update({ where: { id: job.id }, data: { importedSourceId: adzunaSource.id, importedExternalJobId: `attribution-test-${job.id}` } });
+      try {
+        const result = await getPublicJobs();
+        const found = result.find((j) => j.id === job.id);
+        expect(found?.isAdzunaSourced).toBe(true);
+      } finally {
+        await prisma.job.delete({ where: { id: job.id } });
+      }
+    });
+
+    it("an ordinary employer-posted job is never flagged isAdzunaSourced", async () => {
+      const job = await createTestJob(fixtures, { title: "[AI MODERATION TEST] Ordinary Job", status: "active" });
+      try {
+        const result = await getPublicJobs();
+        const found = result.find((j) => j.id === job.id);
+        expect(found?.isAdzunaSourced).toBeFalsy();
+      } finally {
+        await prisma.job.delete({ where: { id: job.id } });
+      }
+    });
+  });
 });

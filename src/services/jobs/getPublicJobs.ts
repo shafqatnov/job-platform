@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { JobListItem } from "@/features/jobs/types";
 import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
+import { findAdzunaSourceId } from "@/services/jobs/adzunaAttribution";
 
 export type GetPublicJobsOptions = {
   /** Restrict results to one country by its public URL slug (e.g. "uk"), not its ISO code. */
@@ -46,6 +47,12 @@ const PUBLIC_JOBS_PAGE_SIZE = 24;
 export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise<JobListItem[]> {
   const keywords = options.keywords?.trim();
 
+  // One cheap, indexed lookup per call (never per job) — see
+  // adzunaAttribution.ts. Resolves to null when no Adzuna source row
+  // exists yet, in which case isAdzunaSourced is simply false for every
+  // job below.
+  const adzunaSourceId = await findAdzunaSourceId();
+
   const jobs = await prisma.job.findMany({
     where: {
       // The one centralized "is this Job publicly visible" rule (see
@@ -79,6 +86,7 @@ export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise
       currencyCode: true,
       postedAt: true,
       createdAt: true,
+      importedSourceId: true,
       company: { select: { name: true } },
       country: { select: { isoCode: true, urlSlug: true, name: true } },
       city: { select: { name: true } },
@@ -105,6 +113,7 @@ export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise
       // timestamp on the same row used only as a defensive fallback —
       // never a fabricated value.
       postedAt: (job.postedAt ?? job.createdAt).toISOString(),
+      isAdzunaSourced: adzunaSourceId !== null && job.importedSourceId === adzunaSourceId,
     })
   );
 }

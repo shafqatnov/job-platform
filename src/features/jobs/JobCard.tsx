@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { SaveJobButton, type SaveState } from "@/features/jobs/SaveJobButton";
+import { AdzunaAttribution } from "@/features/jobs/AdzunaAttribution";
 import type { JobListItem } from "@/features/jobs/types";
 
 export type JobCardProps = {
@@ -48,6 +49,7 @@ export function JobCard({ job, saveState, createProfileHref }: JobCardProps) {
         {job.workMode ? <Badge variant="brand">{job.workMode}</Badge> : null}
       </div>
       {salary ? <p className="text-sm font-medium text-foreground">{salary}</p> : null}
+      {job.isAdzunaSourced ? <AdzunaAttribution countryCode={job.countryCode} /> : null}
       {saveState ? (
         <div className="mt-auto pt-1">
           <SaveJobButton jobId={job.id} saveState={saveState} createProfileHref={createProfileHref} />

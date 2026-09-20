@@ -34,7 +34,11 @@ const MAX_TITLE_LENGTH = 200;
 // "test".
 const KNOWN_TEST_FIXTURE_MARKER = "[AI MODERATION TEST]";
 
-const VALID_RAW_SOURCE_TYPES = new Set(["ATS"]);
+// "ATS" covers Greenhouse/Lever/Ashby-style per-employer boards; "API"
+// covers a shared job-aggregator API source (Adzuna is the first) —
+// both are real, already-registered JobSourceType enum values, never
+// invented here.
+const VALID_RAW_SOURCE_TYPES = new Set(["ATS", "API"]);
 
 export type ImportedJobRejectionReason =
   | "missing_source_id"

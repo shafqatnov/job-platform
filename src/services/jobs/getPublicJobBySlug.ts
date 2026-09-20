@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
+import { findAdzunaSourceId } from "@/services/jobs/adzunaAttribution";
 
 export type PublicJobDetail = {
   id: string;
@@ -22,6 +23,8 @@ export type PublicJobDetail = {
   expiresAt?: string;
   applicationMethod: "on_platform" | "external_url";
   externalApplicationUrl?: string;
+  /** True only for a listing imported from the Adzuna source — see adzunaAttribution.ts. Drives the mandatory "Jobs by Adzuna" attribution (AdzunaAttribution.tsx). */
+  isAdzunaSourced?: boolean;
 };
 
 export type GetPublicJobBySlugOptions = {
@@ -65,6 +68,7 @@ export async function getPublicJobBySlug(
       postedAt: true,
       createdAt: true,
       expiresAt: true,
+      importedSourceId: true,
       company: { select: { name: true, websiteUrl: true } },
       country: { select: { isoCode: true, urlSlug: true, name: true } },
       city: { select: { name: true } },
@@ -76,6 +80,8 @@ export async function getPublicJobBySlug(
   if (!job) {
     return null;
   }
+
+  const adzunaSourceId = await findAdzunaSourceId();
 
   return {
     id: job.id,
@@ -98,5 +104,6 @@ export async function getPublicJobBySlug(
     expiresAt: job.expiresAt ? job.expiresAt.toISOString() : undefined,
     applicationMethod: job.applicationMethod,
     externalApplicationUrl: job.externalApplicationUrl ?? undefined,
+    isAdzunaSourced: adzunaSourceId !== null && job.importedSourceId === adzunaSourceId,
   };
 }

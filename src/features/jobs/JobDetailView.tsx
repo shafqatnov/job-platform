@@ -7,6 +7,7 @@ import { getButtonClassName } from "@/components/Button";
 import { JobCard } from "@/features/jobs/JobCard";
 import { ApplyButton, type ApplyState } from "@/features/jobs/ApplyButton";
 import { SaveJobButton, type SaveState } from "@/features/jobs/SaveJobButton";
+import { AdzunaAttribution } from "@/features/jobs/AdzunaAttribution";
 import type { PublicJobDetail } from "@/services/jobs/getPublicJobBySlug";
 import type { JobListItem } from "@/features/jobs/types";
 
@@ -97,6 +98,11 @@ export function JobDetailView({ job, relatedJobs, applyState, saveState, createP
               <div className="border-t border-border pt-3">
                 <SaveJobButton jobId={job.id} saveState={saveState} createProfileHref={createProfileHref} />
               </div>
+              {job.isAdzunaSourced ? (
+                <div className="border-t border-border pt-3">
+                  <AdzunaAttribution countryCode={job.countryCode} />
+                </div>
+              ) : null}
             </Card>
           </aside>
         </div>

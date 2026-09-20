@@ -24,4 +24,14 @@ export type JobListItem = {
   salaryMax?: number;
   currencyCode?: string;
   postedAt: string;
+  /**
+   * True only for a listing imported from the Adzuna source — see
+   * adzunaAttribution.ts. Drives the mandatory "Jobs by Adzuna"
+   * attribution (AdzunaAttribution.tsx). Optional (rather than
+   * required) so existing JobListItem-constructing call sites that
+   * have nothing to do with Adzuna (e.g. getSavedJobs.ts) don't need to
+   * be touched just to satisfy this field — undefined renders exactly
+   * like false.
+   */
+  isAdzunaSourced?: boolean;
 };
