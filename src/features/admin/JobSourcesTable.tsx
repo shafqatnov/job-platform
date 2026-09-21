@@ -12,6 +12,7 @@ import {
   setJobSourceAuthorizationAction,
   type SetJobSourceAuthorizationActionState,
 } from "@/features/admin/setJobSourceAuthorizationAction";
+import { AdzunaSyncNowButton } from "@/features/admin/AdzunaSyncNowButton";
 import type { JobSourceRow } from "@/services/admin/jobSources";
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
@@ -106,6 +107,8 @@ function JobSourceListItem({ source }: { source: JobSourceRow }) {
             </p>
           ) : null}
         </form>
+
+        {source.name === "Adzuna" ? <AdzunaSyncNowButton isEligible={isVerified && source.enabled} /> : null}
       </div>
     </li>
   );
