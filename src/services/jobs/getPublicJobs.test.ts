@@ -163,6 +163,22 @@ describe("getPublicJobs filters (real dev database, temporary fixtures)", () => 
     expect(resultIds).not.toContain(marketingJobId);
   });
 
+  it("filtering by this fixture's companyId includes its jobs and excludes an unrelated company's job", async () => {
+    const otherFixtures = await createModerationTestFixtures();
+    try {
+      const otherCompanyJob = await createTestJob(otherFixtures, {
+        title: "[AI MODERATION TEST] Unique Job At A Different Company",
+        status: "active",
+      });
+      const result = await getPublicJobs({ companyId: fixtures.companyId });
+      const resultIds = ids(result);
+      expect(resultIds).toContain(engineerJobId);
+      expect(resultIds).not.toContain(otherCompanyJob.id);
+    } finally {
+      await cleanupModerationTestFixtures(otherFixtures);
+    }
+  });
+
   it("an unknown category slug matches no jobs", async () => {
     const result = await getPublicJobs({ categorySlug: "definitely-not-a-real-category-slug" });
     const resultIds = ids(result);

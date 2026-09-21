@@ -10,6 +10,8 @@ export type JobListItem = {
   slug: string;
   title: string;
   companyName: string;
+  /** For linking to the company's own /company/[slug] profile page — always present (Company.slug is required/unique), never optional. */
+  companySlug: string;
   countryCode: string;
   /** Public URL slug for the job's country — may differ from countryCode (e.g. "uk" vs "GB"). */
   countrySlug: string;

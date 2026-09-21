@@ -8,6 +8,8 @@ export type PublicJobDetail = {
   title: string;
   description: string;
   companyName: string;
+  /** For linking to the company's own /company/[slug] profile page — always present (Company.slug is required/unique), never optional. */
+  companySlug: string;
   companyWebsiteUrl?: string;
   countryCode: string;
   countrySlug: string;
@@ -69,7 +71,7 @@ export async function getPublicJobBySlug(
       createdAt: true,
       expiresAt: true,
       importedSourceId: true,
-      company: { select: { name: true, websiteUrl: true } },
+      company: { select: { name: true, slug: true, websiteUrl: true } },
       country: { select: { isoCode: true, urlSlug: true, name: true } },
       city: { select: { name: true } },
       category: { select: { name: true, slug: true } },
@@ -89,6 +91,7 @@ export async function getPublicJobBySlug(
     title: job.title,
     description: job.description,
     companyName: job.company.name,
+    companySlug: job.company.slug,
     companyWebsiteUrl: job.company.websiteUrl ?? undefined,
     countryCode: job.country.isoCode,
     countrySlug: job.country.urlSlug,

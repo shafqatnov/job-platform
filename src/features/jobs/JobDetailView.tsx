@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Section } from "@/components/Section";
 import { Container } from "@/components/Container";
 import { Card } from "@/components/Card";
@@ -79,7 +80,9 @@ export function JobDetailView({ job, relatedJobs, applyState, saveState, createP
           <h1 id="job-title" className="text-2xl font-semibold text-foreground sm:text-3xl">
             {job.title}
           </h1>
-          <p className="text-lg text-muted-foreground">{job.companyName}</p>
+          <Link href={`/company/${job.companySlug}`} className="text-lg text-muted-foreground hover:text-foreground hover:underline">
+            {job.companyName}
+          </Link>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
             <span>
               {job.city}, {job.countryName}

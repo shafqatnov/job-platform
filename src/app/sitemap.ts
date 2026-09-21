@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { COUNTRIES } from "@/constants/countries";
 import { getPublicJobsForSitemap } from "@/services/jobs/getPublicJobsForSitemap";
+import { getPublicCompaniesForSitemap } from "@/services/jobs/getPublicCompaniesForSitemap";
 import { getSiteOrigin } from "@/lib/siteUrl";
 
 /**
@@ -17,6 +18,11 @@ import { getSiteOrigin } from "@/lib/siteUrl";
  *  - /{country}/jobs/{slug} for every currently active, public job,
  *    read in a single query (see getPublicJobsForSitemap.ts) — never
  *    one query per country.
+ *  - /company/{slug} for every company with at least one currently
+ *    active, public job (see getPublicCompaniesForSitemap.ts) — a
+ *    company with zero real open jobs has no indexable page today
+ *    (getPublicCompanyBySlug.ts returns null for it), so it's never
+ *    listed here either.
  *
  * Deliberately excluded: /sign-in, /sign-up (utility pages, marked
  * noindex on the page itself), and every /admin, /employer, /candidate,
@@ -50,5 +56,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticEntries, ...countryEntries, ...jobEntries];
+  const companies = await getPublicCompaniesForSitemap();
+  const companyEntries: MetadataRoute.Sitemap = companies.map((company) => ({
+    url: `${baseUrl}/company/${company.slug}`,
+    lastModified: company.updatedAt,
+    changeFrequency: "weekly",
+    priority: 0.6,
+  }));
+
+  return [...staticEntries, ...countryEntries, ...jobEntries, ...companyEntries];
 }

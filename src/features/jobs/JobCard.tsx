@@ -41,7 +41,9 @@ export function JobCard({ job, saveState, createProfileHref }: JobCardProps) {
         >
           {job.title}
         </Link>
-        <p className="text-sm text-muted-foreground">{job.companyName}</p>
+        <Link href={`/company/${job.companySlug}`} className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+          {job.companyName}
+        </Link>
       </div>
       <div className="flex flex-wrap gap-2">
         <Badge variant="neutral">{location}</Badge>

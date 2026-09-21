@@ -10,6 +10,8 @@ export type GetPublicJobsOptions = {
   categorySlug?: string;
   /** Case-insensitive substring match against title or description. */
   keywords?: string;
+  /** Restrict results to one company by its real Company.id — used by the company profile page's "open jobs" list. */
+  companyId?: string;
 };
 
 const PUBLIC_JOBS_PAGE_SIZE = 24;
@@ -32,12 +34,15 @@ const PUBLIC_JOBS_PAGE_SIZE = 24;
  * never affected.
  *
  * This is the only place allowed to query Job for the public listing —
- * callers (src/features/jobs) must go through this function, never
- * import src/lib/prisma directly. Supports an optional country scope,
- * category scope, and keyword search (title/description substring,
- * case-insensitive) — no other filter exists because no other filterable
- * field exists on Job today (there is no workMode/employmentType column
- * in prisma/schema.prisma; JobFiltersBar's corresponding selects submit
+ * callers (src/features/jobs, the company profile page) must go through
+ * this function, never import src/lib/prisma directly. Supports an
+ * optional country scope, category scope, company scope (companyId —
+ * added for the company profile page's "open jobs" list; the company's
+ * own real Company.id, never a client-supplied/guessed value), and
+ * keyword search (title/description substring, case-insensitive) — no
+ * other filter exists because no other filterable field exists on Job
+ * today (there is no workMode/employmentType column in
+ * prisma/schema.prisma; JobFiltersBar's corresponding selects submit
  * their values but are not applied here, since adding those would
  * require a schema change out of scope for this read path). Errors are
  * intentionally not caught here: a genuine database failure must
@@ -76,6 +81,7 @@ export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise
       ],
       ...(options.countryUrlSlug ? { country: { urlSlug: options.countryUrlSlug } } : {}),
       ...(options.categorySlug ? { category: { slug: options.categorySlug } } : {}),
+      ...(options.companyId ? { companyId: options.companyId } : {}),
     },
     select: {
       id: true,
@@ -87,7 +93,7 @@ export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise
       postedAt: true,
       createdAt: true,
       importedSourceId: true,
-      company: { select: { name: true } },
+      company: { select: { name: true, slug: true } },
       country: { select: { isoCode: true, urlSlug: true, name: true } },
       city: { select: { name: true } },
     },
@@ -101,6 +107,7 @@ export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise
       slug: job.slug,
       title: job.title,
       companyName: job.company.name,
+      companySlug: job.company.slug,
       countryCode: job.country.isoCode,
       countrySlug: job.country.urlSlug,
       countryName: job.country.name,
