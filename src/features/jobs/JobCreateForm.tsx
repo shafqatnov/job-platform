@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
@@ -8,13 +8,15 @@ import { Button, getButtonClassName } from "@/components/Button";
 import { CURRENCY_OPTIONS } from "@/constants/currencies";
 import { createJobAction, type CreateJobActionState } from "@/features/jobs/createJobAction";
 import { generateJobDescriptionAction } from "@/features/jobs/generateJobDescriptionAction";
+import { getCitiesForCountryAction } from "@/features/jobs/getCitiesForCountryAction";
 import type { CategoryOption, CityOption, CountryOption } from "@/services/jobs/referenceData";
 
 export type JobCreateFormProps = {
   companyName: string;
   countries: CountryOption[];
   categories: CategoryOption[];
-  cities: CityOption[];
+  /** Cities for whichever country is initially selected (countries[0]) — never the full City table. */
+  initialCities: CityOption[];
 };
 
 const APPLICATION_METHOD_OPTIONS = [
@@ -24,7 +26,7 @@ const APPLICATION_METHOD_OPTIONS = [
 
 const initialState: CreateJobActionState = {};
 
-export function JobCreateForm({ companyName, countries, categories, cities }: JobCreateFormProps) {
+export function JobCreateForm({ companyName, countries, categories, initialCities }: JobCreateFormProps) {
   const [state, formAction, isPending] = useActionState(createJobAction, initialState);
   const [countrySlug, setCountrySlug] = useState(countries[0]?.slug ?? "");
   const [applicationMethod, setApplicationMethod] = useState("on_platform");
@@ -36,10 +38,37 @@ export function JobCreateForm({ companyName, countries, categories, cities }: Jo
   const [suggestion, setSuggestion] = useState<string | null>(null);
 
   const selectedCountry = countries.find((country) => country.slug === countrySlug);
-  const citiesForCountry = useMemo(
-    () => cities.filter((city) => city.countryId === selectedCountry?.id),
-    [cities, selectedCountry]
-  );
+
+  // Loaded fresh from the server for whichever country is selected —
+  // never the full City table (see getCitiesForCountryAction). Seeded
+  // with initialCities so the default (first) country's list is already
+  // correct on first paint, matching this form's previous behavior.
+  const [citiesForCountry, setCitiesForCountry] = useState<CityOption[]>(initialCities);
+  const [isLoadingCities, setIsLoadingCities] = useState(false);
+  const loadedForCountryId = useRef(selectedCountry?.id);
+
+  useEffect(() => {
+    if (!selectedCountry || loadedForCountryId.current === selectedCountry.id) {
+      return;
+    }
+    let cancelled = false;
+    setCitiesForCountry([]);
+    setIsLoadingCities(true);
+    getCitiesForCountryAction(selectedCountry.id).then((cities) => {
+      if (!cancelled) {
+        loadedForCountryId.current = selectedCountry.id;
+        setCitiesForCountry(cities);
+        setIsLoadingCities(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCountry]);
+
+  // selectedCountry can only be momentarily undefined (e.g. no countries
+  // exist at all) — derived at render time rather than reset via effect.
+  const effectiveCitiesForCountry = selectedCountry ? citiesForCountry : [];
 
   const fieldErrors = state.fieldErrors ?? {};
 
@@ -155,9 +184,9 @@ export function JobCreateForm({ companyName, countries, categories, cities }: Jo
         <Select
           label="City"
           name="city"
-          options={citiesForCountry.map((city) => ({ value: city.slug, label: city.name }))}
-          placeholder={citiesForCountry.length === 0 ? "No cities available" : "Select a city"}
-          disabled={citiesForCountry.length === 0}
+          options={effectiveCitiesForCountry.map((city) => ({ value: city.slug, label: city.name }))}
+          placeholder={isLoadingCities ? "Loading cities…" : effectiveCitiesForCountry.length === 0 ? "No cities available" : "Select a city"}
+          disabled={isLoadingCities || effectiveCitiesForCountry.length === 0}
           error={fieldErrors.city}
         />
       </div>

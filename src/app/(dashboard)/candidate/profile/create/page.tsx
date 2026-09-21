@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { CreateCandidateProfileForm } from "@/features/candidates/CreateCandidateProfileForm";
 import { getSessionUser } from "@/services/auth/getSessionUser";
 import { getCandidateProfile } from "@/services/candidates/getCandidateProfile";
-import { listCountries, listCities } from "@/services/jobs/referenceData";
+import { listCountries, listCitiesForCountry } from "@/services/jobs/referenceData";
 
 export const metadata: Metadata = {
   title: "Create Your Candidate Profile",
@@ -35,7 +35,11 @@ export default async function CreateCandidateProfilePage({
     redirect(redirectTo ?? "/");
   }
 
-  const [countries, cities] = await Promise.all([listCountries(), listCities()]);
+  const countries = await listCountries();
+  // This form defaults its country selector to countries[0] — fetch only
+  // that one country's cities up front (never the full table); any other
+  // country's cities load on demand as the candidate picks one.
+  const initialCities = countries[0] ? await listCitiesForCountry(countries[0].id) : [];
 
   return (
     <Section aria-labelledby="create-profile-heading" containerClassName="max-w-xl">
@@ -46,7 +50,7 @@ export default async function CreateCandidateProfilePage({
         We need a few details before you can apply to jobs.
       </p>
       <Card padding="lg">
-        <CreateCandidateProfileForm countries={countries} cities={cities} redirectTo={redirectTo} />
+        <CreateCandidateProfileForm countries={countries} initialCities={initialCities} redirectTo={redirectTo} />
       </Card>
     </Section>
   );

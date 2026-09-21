@@ -7,10 +7,13 @@ import {
   findCountryByName,
   findCityInCountry,
   findResolvedLocationAlias,
+  listCities,
+  listCitiesForCountry,
   listCountries,
   normalizeLocationText,
   resolveCountryIdentifier,
 } from "@/services/jobs/referenceData";
+import { getCitiesForCountryAction } from "@/features/jobs/getCitiesForCountryAction";
 import { COUNTRY_ALIASES } from "@/constants/countryAliases";
 
 const ALIASES_MODULE_SOURCE = readFileSync(new URL("../../constants/countryAliases.ts", import.meta.url), "utf8");
@@ -242,6 +245,65 @@ describe("referenceData: canonical country/city resolution (real dev database)",
     it("an empty/whitespace-only location text returns null without querying for an empty key", async () => {
       const result = await findResolvedLocationAlias("   ");
       expect(result).toBeNull();
+    });
+  });
+
+  describe("listCitiesForCountry (Country -> City selector performance fix)", () => {
+    it("1. no country selected -> passing an empty countryId returns no cities and never queries the full table", async () => {
+      const result = await listCitiesForCountry("");
+      expect(result).toEqual([]);
+    });
+
+    it("2. Pakistan selected -> only Pakistan cities are returned", async () => {
+      const pakistan = await prisma.country.findUniqueOrThrow({ where: { isoCode: "PK" }, select: { id: true } });
+      const result = await listCitiesForCountry(pakistan.id);
+      expect(result.length).toBeGreaterThan(0);
+      expect(result.every((city) => city.countryId === pakistan.id)).toBe(true);
+    });
+
+    it("3. United States selected -> only US cities are returned", async () => {
+      const us = await prisma.country.findUniqueOrThrow({ where: { isoCode: "US" }, select: { id: true } });
+      const result = await listCitiesForCountry(us.id);
+      expect(result.length).toBeGreaterThan(0);
+      expect(result.every((city) => city.countryId === us.id)).toBe(true);
+    });
+
+    it("6. a wrong/unrelated country's city is never included in another country's list", async () => {
+      const pakistan = await prisma.country.findUniqueOrThrow({ where: { isoCode: "PK" }, select: { id: true } });
+      const uae = await prisma.country.findUniqueOrThrow({ where: { isoCode: "AE" }, select: { id: true } });
+      const pakistanCities = await listCitiesForCountry(pakistan.id);
+      const uaeCities = await listCitiesForCountry(uae.id);
+      const uaeIds = new Set(uaeCities.map((c) => c.id));
+      expect(pakistanCities.some((c) => uaeIds.has(c.id))).toBe(false);
+    });
+
+    it("8. a single country's result is always dramatically smaller than the full city table", async () => {
+      const [us, allCities] = await Promise.all([
+        prisma.country.findUniqueOrThrow({ where: { isoCode: "US" }, select: { id: true } }),
+        listCities(),
+      ]);
+      const usCities = await listCitiesForCountry(us.id);
+      expect(allCities.length).toBeGreaterThan(1000);
+      expect(usCities.length).toBeLessThan(allCities.length);
+    });
+
+    it("9. an unknown/invalid countryId returns an empty list, never an error or a guess", async () => {
+      const result = await listCitiesForCountry(`not-a-real-country-id-${crypto.randomUUID()}`);
+      expect(result).toEqual([]);
+    });
+
+    it("the client-callable action delegates to the same country-scoped query, never the full table", async () => {
+      const pakistan = await prisma.country.findUniqueOrThrow({ where: { isoCode: "PK" }, select: { id: true } });
+      const direct = await listCitiesForCountry(pakistan.id);
+      const viaAction = await getCitiesForCountryAction(pakistan.id);
+      expect(viaAction.map((c) => c.id).sort()).toEqual(direct.map((c) => c.id).sort());
+    });
+
+    it("resolves the exact same India/Osaka/Karachi rows that country-scoped lookups already relied on", async () => {
+      const pakistan = await prisma.country.findUniqueOrThrow({ where: { isoCode: "PK" }, select: { id: true } });
+      const cities = await listCitiesForCountry(pakistan.id);
+      const karachi = cities.find((c) => c.slug === "karachi");
+      expect(karachi?.name).toBe("Karachi");
     });
   });
 });

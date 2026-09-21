@@ -3,7 +3,7 @@ import { Section } from "@/components/Section";
 import { Card } from "@/components/Card";
 import { ImportedJobLocationReviewsTable } from "@/features/admin/ImportedJobLocationReviewsTable";
 import { listPendingLocationReviews } from "@/services/admin/locationReviews";
-import { listCountries, listCities } from "@/services/jobs/referenceData";
+import { listCountries } from "@/services/jobs/referenceData";
 
 export const metadata: Metadata = {
   title: "Unknown Location Review",
@@ -17,7 +17,11 @@ export const metadata: Metadata = {
  * auth check is added here (mirrors imported-jobs/page.tsx exactly).
  */
 export default async function AdminUnknownLocationsPage() {
-  const [reviews, countries, cities] = await Promise.all([listPendingLocationReviews(), listCountries(), listCities()]);
+  // No review here has a known country yet (that's the whole point of
+  // this queue), so there is no "initial" country's cities to prefetch —
+  // each card loads its own cities on demand once an admin picks a
+  // country (see ImportedJobLocationReviewsTable), never the full table.
+  const [reviews, countries] = await Promise.all([listPendingLocationReviews(), listCountries()]);
 
   return (
     <Section aria-labelledby="unknown-locations-heading">
@@ -29,7 +33,7 @@ export default async function AdminUnknownLocationsPage() {
         also teaches Jobnura that mapping for any future job that reports the exact same location text.
       </p>
       <Card padding="lg">
-        <ImportedJobLocationReviewsTable reviews={reviews} countries={countries} cities={cities} />
+        <ImportedJobLocationReviewsTable reviews={reviews} countries={countries} />
       </Card>
     </Section>
   );

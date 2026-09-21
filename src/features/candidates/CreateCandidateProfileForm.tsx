@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Button } from "@/components/Button";
@@ -8,26 +8,53 @@ import {
   createCandidateProfileAction,
   type CreateCandidateProfileActionState,
 } from "@/features/candidates/createCandidateProfileAction";
+import { getCitiesForCountryAction } from "@/features/jobs/getCitiesForCountryAction";
 import type { CityOption, CountryOption } from "@/services/jobs/referenceData";
 
 export type CreateCandidateProfileFormProps = {
   countries: CountryOption[];
-  cities: CityOption[];
+  /** Cities for whichever country is initially selected (countries[0]) — never the full City table. */
+  initialCities: CityOption[];
   /** Where to send the candidate after a successful profile creation, e.g. back to the job they were applying to. */
   redirectTo?: string;
 };
 
 const initialState: CreateCandidateProfileActionState = {};
 
-export function CreateCandidateProfileForm({ countries, cities, redirectTo }: CreateCandidateProfileFormProps) {
+export function CreateCandidateProfileForm({ countries, initialCities, redirectTo }: CreateCandidateProfileFormProps) {
   const [state, formAction, isPending] = useActionState(createCandidateProfileAction, initialState);
   const [countrySlug, setCountrySlug] = useState(countries[0]?.slug ?? "");
 
   const selectedCountry = countries.find((country) => country.slug === countrySlug);
-  const citiesForCountry = useMemo(
-    () => cities.filter((city) => city.countryId === selectedCountry?.id),
-    [cities, selectedCountry]
-  );
+
+  // Loaded fresh from the server for whichever country is selected —
+  // never the full City table (see getCitiesForCountryAction).
+  const [citiesForCountry, setCitiesForCountry] = useState<CityOption[]>(initialCities);
+  const [isLoadingCities, setIsLoadingCities] = useState(false);
+  const loadedForCountryId = useRef(selectedCountry?.id);
+
+  useEffect(() => {
+    if (!selectedCountry || loadedForCountryId.current === selectedCountry.id) {
+      return;
+    }
+    let cancelled = false;
+    setCitiesForCountry([]);
+    setIsLoadingCities(true);
+    getCitiesForCountryAction(selectedCountry.id).then((cities) => {
+      if (!cancelled) {
+        loadedForCountryId.current = selectedCountry.id;
+        setCitiesForCountry(cities);
+        setIsLoadingCities(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCountry]);
+
+  // selectedCountry can only be momentarily undefined (e.g. no countries
+  // exist at all) — derived at render time rather than reset via effect.
+  const effectiveCitiesForCountry = selectedCountry ? citiesForCountry : [];
 
   const fieldErrors = state.fieldErrors ?? {};
 
@@ -49,9 +76,9 @@ export function CreateCandidateProfileForm({ countries, cities, redirectTo }: Cr
         <Select
           label="City (optional)"
           name="city"
-          placeholder={citiesForCountry.length === 0 ? "No cities available" : "Select a city"}
-          disabled={citiesForCountry.length === 0}
-          options={citiesForCountry.map((city) => ({ value: city.slug, label: city.name }))}
+          placeholder={isLoadingCities ? "Loading cities…" : effectiveCitiesForCountry.length === 0 ? "No cities available" : "Select a city"}
+          disabled={isLoadingCities || effectiveCitiesForCountry.length === 0}
+          options={effectiveCitiesForCountry.map((city) => ({ value: city.slug, label: city.name }))}
           error={fieldErrors.city}
         />
       </div>

@@ -6,7 +6,7 @@ import { JobEditForm } from "@/features/jobs/JobEditForm";
 import { getSessionUser } from "@/services/auth/getSessionUser";
 import { getEmployerCompany } from "@/services/employers/getEmployerCompany";
 import { getEmployerJobForManage } from "@/services/jobs/getEmployerJobForManage";
-import { listCategories, listCities } from "@/services/jobs/referenceData";
+import { listCategories, listCitiesForCountry, findCountryBySlug } from "@/services/jobs/referenceData";
 
 export const metadata: Metadata = {
   title: "Edit Job",
@@ -32,14 +32,10 @@ export default async function EmployerJobEditPage({ params }: PageProps<"/employ
     redirect(`/employer/jobs/${job.id}`);
   }
 
-  const [categories, allCities] = await Promise.all([listCategories(), listCities()]);
-  const citiesInCountry = allCities.filter((city) => {
-    // Job.countrySlug isn't in the manage-detail shape; city rows are
-    // already scoped to their own country id, so filtering by whichever
-    // country this job's current city belongs to keeps the form to
-    // exactly the cities valid for this job's (immutable) country.
-    return allCities.find((c) => c.slug === job.citySlug)?.countryId === city.countryId;
-  });
+  // Country is not editable on this form (see updateJob.ts) — resolve the
+  // job's existing country and fetch only its cities, never the full table.
+  const [categories, jobCountry] = await Promise.all([listCategories(), findCountryBySlug(job.countrySlug)]);
+  const citiesInCountry = jobCountry ? await listCitiesForCountry(jobCountry.id) : [];
 
   return (
     <Section aria-labelledby="edit-job-heading" containerClassName="max-w-2xl">

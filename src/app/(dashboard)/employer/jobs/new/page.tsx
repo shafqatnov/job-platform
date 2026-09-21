@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { JobCreateForm } from "@/features/jobs/JobCreateForm";
 import { getSessionUser } from "@/services/auth/getSessionUser";
 import { getEmployerCompany } from "@/services/employers/getEmployerCompany";
-import { listCategories, listCities, listCountries } from "@/services/jobs/referenceData";
+import { listCategories, listCitiesForCountry, listCountries } from "@/services/jobs/referenceData";
 
 export const metadata: Metadata = {
   title: "Post a Job",
@@ -23,11 +23,11 @@ export default async function NewJobPage() {
     redirect("/employer/company/new");
   }
 
-  const [countries, categories, cities] = await Promise.all([
-    listCountries(),
-    listCategories(),
-    listCities(),
-  ]);
+  const [countries, categories] = await Promise.all([listCountries(), listCategories()]);
+  // JobCreateForm defaults its country selector to countries[0] — fetch
+  // only that one country's cities up front (never the full table); any
+  // other country's cities load on demand as the employer picks one.
+  const initialCities = countries[0] ? await listCitiesForCountry(countries[0].id) : [];
 
   return (
     <Section aria-labelledby="new-job-heading" containerClassName="max-w-2xl">
@@ -42,7 +42,7 @@ export default async function NewJobPage() {
           companyName={employerCompany.companyName}
           countries={countries}
           categories={categories}
-          cities={cities}
+          initialCities={initialCities}
         />
       </Card>
     </Section>

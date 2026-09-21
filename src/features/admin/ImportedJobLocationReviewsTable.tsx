@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
@@ -13,6 +13,7 @@ import {
   rejectLocationReviewAction,
   type RejectLocationReviewActionState,
 } from "@/features/admin/rejectLocationReviewAction";
+import { getCitiesForCountryAction } from "@/features/jobs/getCitiesForCountryAction";
 import type { LocationReviewRow } from "@/services/admin/locationReviews";
 import type { CityOption, CountryOption } from "@/services/jobs/referenceData";
 
@@ -24,11 +25,9 @@ const initialRejectState: RejectLocationReviewActionState = {};
 function LocationReviewCard({
   review,
   countries,
-  cities,
 }: {
   review: LocationReviewRow;
   countries: CountryOption[];
-  cities: CityOption[];
 }) {
   const [countryId, setCountryId] = useState("");
   const [cityId, setCityId] = useState("");
@@ -42,7 +41,31 @@ function LocationReviewCard({
     initialRejectState
   );
 
-  const citiesForCountry = useMemo(() => cities.filter((city) => city.countryId === countryId), [cities, countryId]);
+  // No review here has a known country to prefetch cities for, so this
+  // card only ever loads cities on demand once an admin picks a country
+  // — never the full City table (see getCitiesForCountryAction).
+  const [citiesForCountry, setCitiesForCountry] = useState<CityOption[]>([]);
+  const [isLoadingCities, setIsLoadingCities] = useState(false);
+  const loadedForCountryId = useRef("");
+
+  useEffect(() => {
+    if (!countryId || loadedForCountryId.current === countryId) {
+      return;
+    }
+    let cancelled = false;
+    setCitiesForCountry([]);
+    setIsLoadingCities(true);
+    getCitiesForCountryAction(countryId).then((cities) => {
+      if (!cancelled) {
+        loadedForCountryId.current = countryId;
+        setCitiesForCountry(cities);
+        setIsLoadingCities(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [countryId]);
 
   return (
     <li className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
@@ -84,10 +107,18 @@ function LocationReviewCard({
           <Select
             label="City"
             options={citiesForCountry.map((city) => ({ value: city.id, label: city.name }))}
-            placeholder={!countryId ? "Select a country first" : citiesForCountry.length === 0 ? "No cities available" : "Select a city"}
+            placeholder={
+              !countryId
+                ? "Select a country first"
+                : isLoadingCities
+                  ? "Loading cities…"
+                  : citiesForCountry.length === 0
+                    ? "No cities available"
+                    : "Select a city"
+            }
             value={cityId}
             onChange={(event) => setCityId(event.target.value)}
-            disabled={!countryId || citiesForCountry.length === 0}
+            disabled={!countryId || isLoadingCities || citiesForCountry.length === 0}
           />
         </div>
         <Button type="submit" size="sm" disabled={isResolving || isRejecting || !countryId}>
@@ -117,10 +148,9 @@ function LocationReviewCard({
 export type ImportedJobLocationReviewsTableProps = {
   reviews: LocationReviewRow[];
   countries: CountryOption[];
-  cities: CityOption[];
 };
 
-export function ImportedJobLocationReviewsTable({ reviews, countries, cities }: ImportedJobLocationReviewsTableProps) {
+export function ImportedJobLocationReviewsTable({ reviews, countries }: ImportedJobLocationReviewsTableProps) {
   if (reviews.length === 0) {
     return (
       <EmptyState
@@ -133,7 +163,7 @@ export function ImportedJobLocationReviewsTable({ reviews, countries, cities }: 
   return (
     <ul className="flex flex-col divide-y divide-border">
       {reviews.map((review) => (
-        <LocationReviewCard key={review.id} review={review} countries={countries} cities={cities} />
+        <LocationReviewCard key={review.id} review={review} countries={countries} />
       ))}
     </ul>
   );

@@ -40,6 +40,27 @@ export async function listCities(): Promise<CityOption[]> {
   return cities;
 }
 
+/**
+ * Cities scoped to a single country — what every cascading Country ->
+ * City selector actually needs, as opposed to listCities()'s full-table
+ * read. Filters server-side on the indexed leading column of City's own
+ * @@unique([countryId, slug]) constraint, so this stays a single fast,
+ * targeted query regardless of how large the City table grows. Returns
+ * an empty list for an unknown/invalid countryId rather than erroring —
+ * callers already treat "no cities" as a normal, displayable state.
+ */
+export async function listCitiesForCountry(countryId: string): Promise<CityOption[]> {
+  if (!countryId) {
+    return [];
+  }
+  const cities = await prisma.city.findMany({
+    where: { countryId },
+    select: { id: true, slug: true, name: true, countryId: true },
+    orderBy: { name: "asc" },
+  });
+  return cities;
+}
+
 export async function findCountryBySlug(slug: string): Promise<CountryOption | null> {
   const country = await prisma.country.findFirst({
     where: { urlSlug: slug, isActive: true },

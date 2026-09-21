@@ -8,7 +8,7 @@ import { EditCandidateProfileForm } from "@/features/candidates/EditCandidatePro
 import { ResumeUploadField } from "@/features/candidates/ResumeUploadField";
 import { getSessionUser } from "@/services/auth/getSessionUser";
 import { getCandidateProfile } from "@/services/candidates/getCandidateProfile";
-import { listCountries, listCities } from "@/services/jobs/referenceData";
+import { listCountries, listCitiesForCountry, findCountryBySlug } from "@/services/jobs/referenceData";
 
 export const metadata: Metadata = {
   title: "Your Profile",
@@ -43,7 +43,12 @@ export default async function CandidateProfilePage() {
     );
   }
 
-  const [countries, cities] = await Promise.all([listCountries(), listCities()]);
+  const [countries, savedCountry] = await Promise.all([listCountries(), findCountryBySlug(profile.countrySlug)]);
+  // Only the profile's already-saved country's cities are needed up
+  // front (never the full table) — the saved city selection must already
+  // be present as an option on first paint; any other country's cities
+  // load on demand if the candidate changes it.
+  const initialCities = savedCountry ? await listCitiesForCountry(savedCountry.id) : [];
 
   return (
     <Section aria-labelledby="profile-heading" containerClassName="max-w-xl">
@@ -53,7 +58,7 @@ export default async function CandidateProfilePage() {
       <Card padding="lg">
         <EditCandidateProfileForm
           countries={countries}
-          cities={cities}
+          initialCities={initialCities}
           initialFullName={profile.fullName}
           initialHeadline={profile.headline ?? ""}
           initialCountrySlug={profile.countrySlug}
