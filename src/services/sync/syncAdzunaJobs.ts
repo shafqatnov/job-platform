@@ -1,8 +1,10 @@
 import { listJobSources } from "@/services/admin/jobSources";
 import { runAdzunaImporter } from "@/services/importers/adzunaImporter";
+import type { AdzunaRawJob } from "@/services/connectors/adzunaConnector";
 import { validateImportedJob } from "@/services/validation/validateImportedJob";
 import { detectImportedJobDuplicates } from "@/services/deduplication/detectImportedJobDuplicates";
 import { normalizeImportedJob, type NormalizeImportedJobResult } from "@/services/ai/normalizeImportedJob";
+import { findCountryByIsoCode } from "@/services/jobs/referenceData";
 import { decideImportedJobConfidence } from "@/services/decision/decideImportedJobConfidence";
 import { ingestImportedJob } from "@/services/publishing/publishImportedJob";
 
@@ -49,6 +51,95 @@ export type SyncAdzunaJobsSummary = {
 };
 
 export type SyncAdzunaJobsResult = SyncAdzunaJobsGateResult | SyncAdzunaJobsSummary;
+
+/**
+ * ADZUNA-SPECIFIC OPTIMIZATION 1 — deterministic country resolution.
+ *
+ * The importer already knows, with certainty, which Adzuna country
+ * code (gb/us) each listing was fetched under (AdzunaRawJob's own
+ * adzunaCountryCode field) — this is ground truth from the API call
+ * itself, not a guess. Previously the pipeline still asked the AI to
+ * INFER the country purely from free-text location strings like
+ * "Halstad, Norman County", which the AI correctly (and safely) refused
+ * to guess for genuinely ambiguous US county-only text, returning null
+ * and routing the job to Unknown Location Review as "location_uncertain"
+ * — a false positive, since the country was never actually in doubt.
+ *
+ * This maps the known Adzuna country code directly to Jobnura's real,
+ * existing Country row and prefers it over the AI's own guess whenever
+ * it resolves — the AI's country field is left untouched (and the
+ * Unknown Location Review path still fully applies) if the code can't
+ * be resolved to a real Country row, which preserves the existing
+ * safety net for the (currently impossible, but not assumed-impossible)
+ * case of an unrecognized code. City resolution is completely
+ * unaffected — still AI/ResolvedLocationAlias-driven exactly as before.
+ *
+ * This never touches decideImportedJobConfidence.ts, normalizeImportedJob.ts,
+ * or publishImportedJob.ts — only the AI result this Adzuna-only file
+ * itself passes into them — so no other source's behavior changes.
+ */
+async function preferDeterministicAdzunaCountry(
+  rawJob: AdzunaRawJob,
+  normalization: NormalizeImportedJobResult
+): Promise<NormalizeImportedJobResult> {
+  if (!normalization.ok) {
+    return normalization;
+  }
+
+  const knownCountry = await findCountryByIsoCode(rawJob.adzunaCountryCode);
+  if (!knownCountry) {
+    // Genuinely unresolvable — fall through to the existing Unknown
+    // Location Review workflow exactly as before. Never guessed.
+    return normalization;
+  }
+
+  return {
+    ...normalization,
+    result: { ...normalization.result, country: knownCountry.name },
+  };
+}
+
+/**
+ * ADZUNA-SPECIFIC OPTIMIZATION 2 — snippet-aware quality signal.
+ *
+ * Adzuna's Search API always returns a short description SNIPPET, never
+ * a complete posting (see AdzunaRawJob.description's own doc comment).
+ * The AI's quality assessment is content-based and has no way to know
+ * this — so it frequently (and, taken alone, correctly) reports "weak"
+ * content quality and lists missing sections/fields, purely because the
+ * text it was given is short. That is a structural characteristic of
+ * this data source, not a genuine quality problem with any individual
+ * listing, so treating it as an admin_review trigger is a false
+ * positive for Adzuna specifically.
+ *
+ * This narrowly discounts ONLY that combination — contentQuality
+ * exactly "weak" AND zero suspicious signals — down to "good" with no
+ * missing-fields flag. It NEVER touches:
+ *  - a "poor" quality verdict (a stronger, more deliberate signal,
+ *    always still routes to review),
+ *  - any suspicious signal (always still routes to review),
+ *  - category/location uncertainty, validation failures, or duplicate
+ *    detection (all untouched, still fully authoritative).
+ * decideImportedJobConfidence.ts itself is never modified — every other
+ * source's confidence thresholds are completely unaffected.
+ */
+function discountAdzunaSnippetQualitySignal(normalization: NormalizeImportedJobResult): NormalizeImportedJobResult {
+  if (!normalization.ok) {
+    return normalization;
+  }
+  const { quality } = normalization.result;
+  if (quality.contentQuality !== "weak" || quality.suspiciousSignals.length > 0) {
+    return normalization;
+  }
+
+  return {
+    ...normalization,
+    result: {
+      ...normalization.result,
+      quality: { ...quality, contentQuality: "good", missingImportantFields: [] },
+    },
+  };
+}
 
 export async function syncAdzunaJobs(): Promise<SyncAdzunaJobsResult> {
   const sources = await listJobSources();
@@ -106,10 +197,15 @@ export async function syncAdzunaJobs(): Promise<SyncAdzunaJobsResult> {
     // (decideImportedJobConfidence's own hard-block precedence) — skip
     // the AI call entirely rather than spend an OpenAI request on a
     // job that is already guaranteed do_not_publish.
-    const normalization: NormalizeImportedJobResult =
+    let normalization: NormalizeImportedJobResult =
       duplicate.outcome === "exact_duplicate"
         ? { ok: false, error: "Skipped AI normalization: exact duplicate of an already-processed listing." }
         : await normalizeImportedJob(rawJob);
+
+    if (duplicate.outcome !== "exact_duplicate") {
+      normalization = await preferDeterministicAdzunaCountry(rawJob, normalization);
+      normalization = discountAdzunaSnippetQualitySignal(normalization);
+    }
 
     const decision = decideImportedJobConfidence({
       validation,

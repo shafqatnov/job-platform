@@ -30,6 +30,22 @@ vi.mock("@/services/publishing/publishImportedJob", () => ({
   ingestImportedJob: (...args: unknown[]) => ingestImportedJobMock(...args),
 }));
 
+const findCountryByIsoCodeMock = vi.fn();
+vi.mock("@/services/jobs/referenceData", () => ({
+  findCountryByIsoCode: (...args: unknown[]) => findCountryByIsoCodeMock(...args),
+}));
+
+// Realistic default: gb/us (the only Adzuna countries used in this
+// suite's fixtures) resolve to a real Country row, matching production
+// truth — individual tests override this to null to exercise the
+// "genuinely unresolvable" fallback path.
+function defaultCountryLookup(isoCode: string) {
+  const normalized = isoCode.toLowerCase();
+  if (normalized === "gb") return Promise.resolve({ id: "country-gb", slug: "uk", name: "United Kingdom" });
+  if (normalized === "us") return Promise.resolve({ id: "country-us", slug: "usa", name: "United States" });
+  return Promise.resolve(null);
+}
+
 const { syncAdzunaJobs } = await import("@/services/sync/syncAdzunaJobs");
 const SOURCE = readFileSync(new URL("./syncAdzunaJobs.ts", import.meta.url), "utf8");
 
@@ -121,6 +137,8 @@ describe("syncAdzunaJobs", () => {
     detectImportedJobDuplicatesMock.mockReset();
     normalizeImportedJobMock.mockReset();
     ingestImportedJobMock.mockReset();
+    findCountryByIsoCodeMock.mockReset();
+    findCountryByIsoCodeMock.mockImplementation(defaultCountryLookup);
   });
 
   afterEach(() => {
@@ -239,8 +257,9 @@ describe("syncAdzunaJobs", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("9. an AI-uncertain location routes to admin_review, the existing review path, not a silent failure", async () => {
+  it("9. when even the deterministic Adzuna country mapping can't resolve (a genuinely unrecognized code), an AI-uncertain location still routes to admin_review — the Unknown Location Review safety net is preserved", async () => {
     listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+    findCountryByIsoCodeMock.mockResolvedValue(null); // simulates the safety-net path, not a normal gb/us case
     const rawJob = makeRawJob();
     runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
     detectImportedJobDuplicatesMock.mockResolvedValue([{ outcome: "unique", reason: null, matchedWith: null, job: rawJob }]);
@@ -252,6 +271,102 @@ describe("syncAdzunaJobs", () => {
     const [callArg] = ingestImportedJobMock.mock.calls[0];
     expect(callArg.decision.decision).toBe("admin_review");
     expect(callArg.decision.reasons).toContain("location_uncertain");
+  });
+
+  describe("Adzuna-specific confidence optimizations", () => {
+    it("a known gb/us country resolves deterministically even when the AI can't infer it from ambiguous text — no location_uncertain, and the resolved value flows into publishing", async () => {
+      listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+      const rawJob = makeRawJob({ adzunaCountryCode: "us", location: "Halstad, Norman County" });
+      runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+      detectImportedJobDuplicatesMock.mockResolvedValue([{ outcome: "unique", reason: null, matchedWith: null, job: rawJob }]);
+      // The AI genuinely can't tell the country from this text alone — exactly the real, observed case.
+      normalizeImportedJobMock.mockResolvedValue(makeGoodNormalization({ country: null, city: "Halstad" }));
+      ingestImportedJobMock.mockResolvedValue({ outcome: "published", jobId: "job-1", reviewId: "review-1" });
+
+      await syncAdzunaJobs();
+
+      expect(findCountryByIsoCodeMock).toHaveBeenCalledWith("us");
+      const [callArg] = ingestImportedJobMock.mock.calls[0];
+      expect(callArg.normalization.result.country).toBe("United States");
+      expect(callArg.decision.reasons).not.toContain("location_uncertain");
+    });
+
+    it("does not call the deterministic country lookup for an exact duplicate (still skips all AI-adjacent work for guaranteed do_not_publish jobs)", async () => {
+      listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+      const rawJob = makeRawJob();
+      runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+      detectImportedJobDuplicatesMock.mockResolvedValue([
+        { outcome: "exact_duplicate", reason: "exact_source_identity_within_batch", matchedWith: null, job: rawJob },
+      ]);
+      ingestImportedJobMock.mockResolvedValue({ outcome: "rejected", reviewId: "review-1" });
+
+      await syncAdzunaJobs();
+
+      expect(findCountryByIsoCodeMock).not.toHaveBeenCalled();
+    });
+
+    it("a \"weak\" quality verdict with zero suspicious signals is discounted — it never triggers content_quality_weak or missing_important_fields, and the job can reach auto_publish", async () => {
+      listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+      const rawJob = makeRawJob();
+      runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+      detectImportedJobDuplicatesMock.mockResolvedValue([{ outcome: "unique", reason: null, matchedWith: null, job: rawJob }]);
+      normalizeImportedJobMock.mockResolvedValue(
+        makeGoodNormalization({
+          quality: {
+            contentQuality: "weak",
+            concerns: ["Short description"],
+            missingImportantFields: ["Detailed responsibilities"],
+            suspiciousSignals: [],
+          },
+        })
+      );
+      ingestImportedJobMock.mockResolvedValue({ outcome: "published", jobId: "job-1", reviewId: "review-1" });
+
+      await syncAdzunaJobs();
+
+      const [callArg] = ingestImportedJobMock.mock.calls[0];
+      expect(callArg.decision.reasons).not.toContain("content_quality_weak");
+      expect(callArg.decision.reasons).not.toContain("missing_important_fields");
+      expect(callArg.decision.decision).toBe("auto_publish");
+    });
+
+    it("a \"poor\" quality verdict is NEVER discounted — genuinely poor content still routes to review regardless of source", async () => {
+      listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+      const rawJob = makeRawJob();
+      runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+      detectImportedJobDuplicatesMock.mockResolvedValue([{ outcome: "unique", reason: null, matchedWith: null, job: rawJob }]);
+      normalizeImportedJobMock.mockResolvedValue(
+        makeGoodNormalization({
+          quality: { contentQuality: "poor", concerns: ["Templated, low-effort listing"], missingImportantFields: [], suspiciousSignals: [] },
+        })
+      );
+      ingestImportedJobMock.mockResolvedValue({ outcome: "queued_for_review", reviewId: "review-1" });
+
+      await syncAdzunaJobs();
+
+      const [callArg] = ingestImportedJobMock.mock.calls[0];
+      expect(callArg.decision.reasons).toContain("content_quality_poor");
+      expect(callArg.decision.decision).toBe("admin_review");
+    });
+
+    it("a suspicious signal is NEVER discounted, even when quality is only \"weak\" — still routes to review", async () => {
+      listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+      const rawJob = makeRawJob();
+      runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+      detectImportedJobDuplicatesMock.mockResolvedValue([{ outcome: "unique", reason: null, matchedWith: null, job: rawJob }]);
+      normalizeImportedJobMock.mockResolvedValue(
+        makeGoodNormalization({
+          quality: { contentQuality: "weak", concerns: [], missingImportantFields: [], suspiciousSignals: ["Templated filler text"] },
+        })
+      );
+      ingestImportedJobMock.mockResolvedValue({ outcome: "queued_for_review", reviewId: "review-1" });
+
+      await syncAdzunaJobs();
+
+      const [callArg] = ingestImportedJobMock.mock.calls[0];
+      expect(callArg.decision.reasons).toContain("suspicious_signals_present");
+      expect(callArg.decision.decision).toBe("admin_review");
+    });
   });
 
   it("11+12. no secret or credential value ever appears in the sync summary", async () => {
