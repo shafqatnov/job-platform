@@ -11,10 +11,14 @@ import { getSiteOrigin } from "@/lib/siteUrl";
  * Only real, public, indexable routes are included:
  *  - the static marketing/legal pages
  *  - /{country}/jobs for every country in the real COUNTRIES reference
- *    list (the same list every other part of this site already uses
- *    for country selection/routing — not invented, and each one is a
- *    genuinely valid, resolvable page today, per
- *    src/constants/countries.ts's own routing role)
+ *    list that currently has at least one publicly visible job — a
+ *    country with zero jobs right now is excluded (it also gets a
+ *    conditional noindex on the page itself, see
+ *    [country]/jobs/page.tsx's own generateMetadata) but stays a
+ *    genuinely valid, resolvable, 200-status page; it reappears here
+ *    automatically the instant it has a real job, with no manual/
+ *    hardcoded list involved. Derived from the SAME job list already
+ *    fetched below for the job entries — zero additional queries.
  *  - /{country}/jobs/{slug} for every currently active, public job,
  *    read in a single query (see getPublicJobsForSitemap.ts) — never
  *    one query per country.
@@ -41,14 +45,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
   ];
 
-  const countryEntries: MetadataRoute.Sitemap = COUNTRIES.map((country) => ({
+  const jobs = await getPublicJobsForSitemap();
+
+  // The same one query's results, reused — never a second query per
+  // country and never a hardcoded "known empty" list.
+  const countriesWithJobs = new Set(jobs.map((job) => job.countryUrlSlug));
+  const countryEntries: MetadataRoute.Sitemap = COUNTRIES.filter((country) =>
+    countriesWithJobs.has(country.slug)
+  ).map((country) => ({
     url: `${baseUrl}/${country.slug}/jobs`,
     lastModified: now,
     changeFrequency: "hourly",
     priority: 0.8,
   }));
 
-  const jobs = await getPublicJobsForSitemap();
   const jobEntries: MetadataRoute.Sitemap = jobs.map((job) => ({
     url: `${baseUrl}/${job.countryUrlSlug}/jobs/${job.slug}`,
     lastModified: job.updatedAt,

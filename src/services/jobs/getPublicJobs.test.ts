@@ -1,12 +1,33 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { getPublicJobs } from "@/services/jobs/getPublicJobs";
+import { getPublicJobs, hasPublicJobsInCountry } from "@/services/jobs/getPublicJobs";
+import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
 import {
   createModerationTestFixtures,
   createTestJob,
   cleanupModerationTestFixtures,
   type ModerationTestFixtures,
 } from "@/test-utils/moderationFixtures";
+
+/** Finds a real Country row (other than the given id) with zero currently-public jobs, or null if every country has at least one. */
+async function findCountryWithNoPublicJobs(
+  excludeCountryId: string
+): Promise<{ id: string; urlSlug: string } | null> {
+  const countries = await prisma.country.findMany({
+    where: { id: { not: excludeCountryId } },
+    select: { id: true, urlSlug: true },
+  });
+  for (const country of countries) {
+    const job = await prisma.job.findFirst({
+      where: { AND: [publicJobVisibilityWhere(), { countryId: country.id }] },
+      select: { id: true },
+    });
+    if (!job) {
+      return country;
+    }
+  }
+  return null;
+}
 
 /**
  * Real dev-database test (same pattern as the AI moderation suite) for
@@ -317,5 +338,101 @@ describe("getPublicJobs filters (real dev database, temporary fixtures)", () => 
         await prisma.job.delete({ where: { id: job.id } });
       }
     });
+  });
+});
+
+/**
+ * hasPublicJobsInCountry (real dev database, temporary fixtures) — the
+ * lightweight existence check that [country]/jobs/page.tsx's
+ * generateMetadata() uses to decide the conditional noindex. Never
+ * assumes a specific country slug (e.g. "lu") is empty ahead of time —
+ * every "empty" scenario below dynamically finds a real Country row
+ * with zero currently-public jobs at test-run time, so these tests stay
+ * correct even as real production data changes.
+ */
+describe("hasPublicJobsInCountry (real dev database, temporary fixtures)", () => {
+  let fixtures: ModerationTestFixtures;
+
+  beforeAll(async () => {
+    fixtures = await createModerationTestFixtures();
+  });
+
+  afterAll(async () => {
+    await cleanupModerationTestFixtures(fixtures);
+  });
+
+  it("1 & 3. a country with at least one active public job returns true, using the same visibility rule as getPublicJobs", async () => {
+    const job = await createTestJob(fixtures, { title: "[AI MODERATION TEST] Existence Check Job", status: "active" });
+    const country = await prisma.country.findUniqueOrThrow({ where: { id: fixtures.countryId }, select: { urlSlug: true } });
+    try {
+      expect(await hasPublicJobsInCountry(country.urlSlug)).toBe(true);
+    } finally {
+      await prisma.job.delete({ where: { id: job.id } });
+    }
+  });
+
+  it("2. a country with genuinely zero public jobs returns false", async () => {
+    const emptyCountry = await findCountryWithNoPublicJobs(fixtures.countryId);
+    if (!emptyCountry) {
+      // Every real Country row currently has at least one public job —
+      // not this test's assumption to force; skip gracefully rather than
+      // failing on live data shape (same convention as the Adzuna
+      // attribution test above).
+      return;
+    }
+    expect(await hasPublicJobsInCountry(emptyCountry.urlSlug)).toBe(false);
+  });
+
+  it("6. a disposable test-fixture-marker job does not count as a public job", async () => {
+    const emptyCountry = await findCountryWithNoPublicJobs(fixtures.countryId);
+    if (!emptyCountry) {
+      return;
+    }
+    const fixtureJob = await createTestJob(fixtures, {
+      title: "[IMPORT TEST] Should Not Count",
+      status: "active",
+      countryId: emptyCountry.id,
+    });
+    try {
+      expect(await hasPublicJobsInCountry(emptyCountry.urlSlug)).toBe(false);
+    } finally {
+      await prisma.job.delete({ where: { id: fixtureJob.id } });
+    }
+  });
+
+  it("5. an expired or rejected job does not count as a public job (same lifecycle rule as getPublicJobs)", async () => {
+    const emptyCountry = await findCountryWithNoPublicJobs(fixtures.countryId);
+    if (!emptyCountry) {
+      return;
+    }
+    const expiredJob = await createTestJob(fixtures, {
+      title: "[AI MODERATION TEST] Expired Existence Check",
+      status: "active",
+      countryId: emptyCountry.id,
+      expiresAt: new Date(Date.now() - 1000 * 60 * 60),
+    });
+    try {
+      expect(await hasPublicJobsInCountry(emptyCountry.urlSlug)).toBe(false);
+    } finally {
+      await prisma.job.delete({ where: { id: expiredJob.id } });
+    }
+  });
+
+  it("7. a country automatically flips true -> false -> true as its only public job is removed and re-created, with no stale caching across calls", async () => {
+    const emptyCountry = await findCountryWithNoPublicJobs(fixtures.countryId);
+    if (!emptyCountry) {
+      return;
+    }
+    expect(await hasPublicJobsInCountry(emptyCountry.urlSlug)).toBe(false);
+
+    const job = await createTestJob(fixtures, {
+      title: "[AI MODERATION TEST] Newly Populated Country",
+      status: "active",
+      countryId: emptyCountry.id,
+    });
+    expect(await hasPublicJobsInCountry(emptyCountry.urlSlug)).toBe(true);
+
+    await prisma.job.delete({ where: { id: job.id } });
+    expect(await hasPublicJobsInCountry(emptyCountry.urlSlug)).toBe(false);
   });
 });

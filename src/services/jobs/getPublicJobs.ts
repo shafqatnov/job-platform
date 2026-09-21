@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import type { JobListItem } from "@/features/jobs/types";
 import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
@@ -124,3 +125,31 @@ export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise
     })
   );
 }
+
+/**
+ * Lightweight existence check — true only if this country currently has
+ * at least one publicly visible job, using the exact same
+ * publicJobVisibilityWhere() rule as getPublicJobs() itself (never a
+ * separate/looser rule). Used by [country]/jobs/page.tsx's
+ * generateMetadata() to decide whether to emit a conditional noindex —
+ * deliberately NOT the same as calling getPublicJobs({ countryUrlSlug })
+ * and checking .length, which would fetch up to PUBLIC_JOBS_PAGE_SIZE
+ * full job records just to answer a true/false question; findFirst here
+ * is a single indexed lookup that stops at the first match.
+ *
+ * Wrapped in React's cache() — same pattern as getSessionUser.ts's own
+ * doc comment explains — so if Next.js's generateMetadata/page-rendering
+ * lifecycle happens to need this same country's answer more than once
+ * within one request, only one query actually runs. Evaluated fresh
+ * every request (no build-time or otherwise-cached result persists
+ * across requests): a country automatically becomes eligible again the
+ * instant it has its first real job, and automatically reverts if it
+ * later has none, with no manual/hardcoded list involved.
+ */
+export const hasPublicJobsInCountry = cache(async (countryUrlSlug: string): Promise<boolean> => {
+  const job = await prisma.job.findFirst({
+    where: { AND: [publicJobVisibilityWhere(), { country: { urlSlug: countryUrlSlug } }] },
+    select: { id: true },
+  });
+  return job !== null;
+});

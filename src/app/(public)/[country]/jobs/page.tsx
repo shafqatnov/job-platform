@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getCountryBySlug } from "@/constants/countries";
 import { JobsListingView } from "@/features/jobs/JobsListingView";
 import { getConfiguredSiteUrl } from "@/lib/siteUrl";
+import { hasPublicJobsInCountry } from "@/services/jobs/getPublicJobs";
 
 export async function generateMetadata({
   params,
@@ -25,10 +26,21 @@ export async function generateMetadata({
   // real, known country above — never an invalid/guessed one.
   const path = `/${country.slug}/jobs`;
 
+  // Evaluated fresh from the real current public-job count on every
+  // request (never a hardcoded/cached list of "known empty" countries)
+  // — see hasPublicJobsInCountry's own doc comment. A country with zero
+  // public jobs right now stays reachable and unchanged in every other
+  // way (still 200, still fully navigable, still shows its own genuine
+  // "no jobs" empty state — see JobsListingView), it is simply excluded
+  // from search results until it has something worth showing, and
+  // automatically included again the moment it does.
+  const hasJobs = await hasPublicJobsInCountry(country.slug);
+
   return {
     title,
     description,
     ...(siteUrl ? { alternates: { canonical: `${siteUrl}${path}` } } : {}),
+    ...(hasJobs ? {} : { robots: { index: false, follow: true } }),
     openGraph: {
       title,
       description,
