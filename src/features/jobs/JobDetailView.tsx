@@ -36,6 +36,30 @@ function formatSalary(job: PublicJobDetail): string | undefined {
   return `${job.currencyCode} ${job.salaryMin.toLocaleString()}–${job.salaryMax.toLocaleString()}`;
 }
 
+/**
+ * The external-apply button's label must accurately describe WHERE
+ * clicking it actually sends the candidate. For an Adzuna-sourced job,
+ * that destination is always the Adzuna listing itself (see
+ * AdzunaRawJob.sourceUrl's own doc comment) — never the employer's own
+ * site — so the generic "Apply on company site" wording is actively
+ * misleading there. Every other external-URL source (employer-direct
+ * today; any future source whose destination genuinely IS the
+ * employer's own site/board) keeps that existing, accurate wording
+ * unchanged.
+ *
+ * Reuses job.isAdzunaSourced — the same per-source signal
+ * AdzunaAttribution.tsx already keys off — rather than inventing a new
+ * one. A future source whose destination is similarly NOT the
+ * employer's own site should add its own early-return branch here
+ * (mirroring the Adzuna one below), never change the shared default.
+ */
+function getApplyButtonLabel(job: Pick<PublicJobDetail, "isAdzunaSourced">): string {
+  if (job.isAdzunaSourced) {
+    return "Apply via Adzuna";
+  }
+  return "Apply on company site";
+}
+
 export function JobDetailView({ job, relatedJobs, applyState, saveState, createProfileHref }: JobDetailViewProps) {
   const salary = formatSalary(job);
   const hasExternalUrl = job.applicationMethod === "external_url" && Boolean(job.externalApplicationUrl);
@@ -90,7 +114,7 @@ export function JobDetailView({ job, relatedJobs, applyState, saveState, createP
                   rel="noopener noreferrer nofollow"
                   className={getButtonClassName({ fullWidth: true })}
                 >
-                  Apply on company site
+                  {getApplyButtonLabel(job)}
                 </a>
               ) : (
                 <ApplyButton jobId={job.id} applyState={applyState} createProfileHref={createProfileHref} />
