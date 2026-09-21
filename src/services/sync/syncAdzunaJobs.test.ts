@@ -367,6 +367,93 @@ describe("syncAdzunaJobs", () => {
       expect(callArg.decision.reasons).toContain("suspicious_signals_present");
       expect(callArg.decision.decision).toBe("admin_review");
     });
+
+    it("strips a trailing source-truncation note from the normalized description before publishing", async () => {
+      listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+      const rawJob = makeRawJob();
+      runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+      detectImportedJobDuplicatesMock.mockResolvedValue([{ outcome: "unique", reason: null, matchedWith: null, job: rawJob }]);
+      normalizeImportedJobMock.mockResolvedValue(
+        makeGoodNormalization({
+          normalizedDescription:
+            'Join the RAC as a Mobile Vehicle Technician. The role offers a competitive base salary. The supplied description is truncated after "roadside resc…"',
+        })
+      );
+      ingestImportedJobMock.mockResolvedValue({ outcome: "published", jobId: "job-1", reviewId: "review-1" });
+
+      await syncAdzunaJobs();
+
+      const [callArg] = ingestImportedJobMock.mock.calls[0];
+      const description: string = callArg.normalization.result.normalizedDescription;
+      expect(description).not.toMatch(/supplied description/i);
+      expect(description).not.toMatch(/truncat/i);
+      expect(description).toContain("Join the RAC as a Mobile Vehicle Technician.");
+      expect(description).toContain("The role offers a competitive base salary.");
+    });
+
+    it("also strips a bracketed source-truncation note without leaving a stray bracket behind", async () => {
+      listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+      const rawJob = makeRawJob();
+      runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+      detectImportedJobDuplicatesMock.mockResolvedValue([{ outcome: "unique", reason: null, matchedWith: null, job: rawJob }]);
+      normalizeImportedJobMock.mockResolvedValue(
+        makeGoodNormalization({
+          normalizedDescription: "General Managers lead their team and drive results. [Description appears truncated in the source.]",
+        })
+      );
+      ingestImportedJobMock.mockResolvedValue({ outcome: "published", jobId: "job-1", reviewId: "review-1" });
+
+      await syncAdzunaJobs();
+
+      const [callArg] = ingestImportedJobMock.mock.calls[0];
+      const description: string = callArg.normalization.result.normalizedDescription;
+      expect(description).toBe("General Managers lead their team and drive results.");
+    });
+
+    it("never strips genuine content that merely mentions unrelated words like 'source' or 'truncated' without both appearing together in a source-reference sentence", async () => {
+      listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+      const rawJob = makeRawJob();
+      runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+      detectImportedJobDuplicatesMock.mockResolvedValue([{ outcome: "unique", reason: null, matchedWith: null, job: rawJob }]);
+      const genuineDescription =
+        "This role reports to the Head of Engineering. Freight is sourced from major retail partners across the region.";
+      normalizeImportedJobMock.mockResolvedValue(makeGoodNormalization({ normalizedDescription: genuineDescription }));
+      ingestImportedJobMock.mockResolvedValue({ outcome: "published", jobId: "job-1", reviewId: "review-1" });
+
+      await syncAdzunaJobs();
+
+      const [callArg] = ingestImportedJobMock.mock.calls[0];
+      expect(callArg.normalization.result.normalizedDescription).toBe(genuineDescription);
+    });
+
+    it("never leaves an empty description even if the entire text happens to match the truncation-note pattern", async () => {
+      listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+      const rawJob = makeRawJob();
+      runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+      detectImportedJobDuplicatesMock.mockResolvedValue([{ outcome: "unique", reason: null, matchedWith: null, job: rawJob }]);
+      const onlyNote = "The source description is truncated.";
+      normalizeImportedJobMock.mockResolvedValue(makeGoodNormalization({ normalizedDescription: onlyNote }));
+      ingestImportedJobMock.mockResolvedValue({ outcome: "published", jobId: "job-1", reviewId: "review-1" });
+
+      await syncAdzunaJobs();
+
+      const [callArg] = ingestImportedJobMock.mock.calls[0];
+      expect(callArg.normalization.result.normalizedDescription).toBe(onlyNote);
+    });
+
+    it("does not run the truncation-note stripper for an exact duplicate", async () => {
+      listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+      const rawJob = makeRawJob();
+      runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+      detectImportedJobDuplicatesMock.mockResolvedValue([
+        { outcome: "exact_duplicate", reason: "exact_source_identity_within_batch", matchedWith: null, job: rawJob },
+      ]);
+      ingestImportedJobMock.mockResolvedValue({ outcome: "rejected", reviewId: "review-1" });
+
+      await syncAdzunaJobs();
+
+      expect(normalizeImportedJobMock).not.toHaveBeenCalled();
+    });
   });
 
   it("11+12. no secret or credential value ever appears in the sync summary", async () => {

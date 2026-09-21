@@ -141,6 +141,71 @@ function discountAdzunaSnippetQualitySignal(normalization: NormalizeImportedJobR
   };
 }
 
+/**
+ * ADZUNA-SPECIFIC OPTIMIZATION 3 — strip source-truncation meta-commentary.
+ *
+ * Because Adzuna's description is always a short, mid-sentence-cut
+ * snippet (see AdzunaRawJob.description's own doc comment), the AI
+ * normalization step frequently appends a trailing note ABOUT that
+ * truncation itself — e.g. "The source description is truncated after
+ * 'roadside resc…'" or "[Source description is truncated.]" — as part
+ * of its own normalizedDescription output. That note is true and
+ * harmless as an internal observation, but it is never real job content
+ * and reads as a broken/unprofessional artifact on a live, public job
+ * page (confirmed present on this exact task's one currently-published
+ * Adzuna job).
+ *
+ * This narrowly removes only that trailing sentence/bracketed clause —
+ * matched by the specific, unambiguous combination of "source"/
+ * "supplied description" together with "truncat…"/"ends mid-sentence"
+ * in the same sentence, a combination essentially impossible in genuine
+ * employer-authored content — and leaves every other sentence
+ * (including any other AI commentary this task deliberately does not
+ * attempt to also clean up) untouched. Falls back to the original
+ * description if stripping would ever leave nothing behind, so a
+ * description is never emptied by this. Never touches
+ * normalizeImportedJob.ts's shared prompt/logic, so Greenhouse and every
+ * other source's normalization behavior is completely unaffected.
+ */
+// Observed AI phrasings for this note vary ("is truncated", "ends
+// abruptly", "ends mid-sentence", "appears truncated in the source",
+// "truncated in the source posting"), so this filters whole sentences
+// that combine BOTH a reference to the source material itself AND a
+// truncation/incompleteness word — a combination essentially impossible
+// in genuine employer-authored job content.
+const SOURCE_REFERENCE_PATTERN =
+  /\b(?:the\s+)?(?:source|supplied)\s+(?:description|posting|text|snippet|listing)\b|\bdescription\b[^.!?]{0,30}\bsource\b/i;
+const TRUNCATION_WORD_PATTERN = /truncat\w*|ends?\s+abruptly|ends?\s+mid-sentence|\bincomplete\b|cuts?\s+off/i;
+
+function stripAdzunaSourceTruncationNotes(normalization: NormalizeImportedJobResult): NormalizeImportedJobResult {
+  if (!normalization.ok) {
+    return normalization;
+  }
+
+  // Bracketed notes (e.g. "[Description appears truncated in the
+  // source.]") are handled as their own whole unit FIRST — the sentence
+  // splitter below would otherwise break on the period inside the
+  // brackets and leave a stray "]" behind.
+  const withoutBracketedNotes = normalization.result.normalizedDescription.replace(/\[[^\]]*\]/g, (bracketed) =>
+    SOURCE_REFERENCE_PATTERN.test(bracketed) && TRUNCATION_WORD_PATTERN.test(bracketed) ? "" : bracketed
+  );
+
+  const sentences = withoutBracketedNotes.match(/[^.!?]+[.!?]?/g) ?? [withoutBracketedNotes];
+  const cleaned = sentences
+    .filter((sentence) => !(SOURCE_REFERENCE_PATTERN.test(sentence) && TRUNCATION_WORD_PATTERN.test(sentence)))
+    .join("")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+  if (!cleaned) {
+    return normalization;
+  }
+
+  return {
+    ...normalization,
+    result: { ...normalization.result, normalizedDescription: cleaned },
+  };
+}
+
 export async function syncAdzunaJobs(): Promise<SyncAdzunaJobsResult> {
   const sources = await listJobSources();
   const adzunaSource = sources.find((source) => source.name === "Adzuna");
@@ -205,6 +270,7 @@ export async function syncAdzunaJobs(): Promise<SyncAdzunaJobsResult> {
     if (duplicate.outcome !== "exact_duplicate") {
       normalization = await preferDeterministicAdzunaCountry(rawJob, normalization);
       normalization = discountAdzunaSnippetQualitySignal(normalization);
+      normalization = stripAdzunaSourceTruncationNotes(normalization);
     }
 
     const decision = decideImportedJobConfidence({
