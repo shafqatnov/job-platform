@@ -7,7 +7,7 @@ import { getConfiguredSiteUrl } from "@/lib/siteUrl";
 
 const TITLE = "Privacy Policy";
 const DESCRIPTION = "How Jobnura collects, uses, and protects account, employer, and candidate data.";
-const LAST_UPDATED = "17 September 2026";
+const LAST_UPDATED = "22 September 2026";
 const siteUrl = getConfiguredSiteUrl();
 const path = "/privacy";
 
@@ -64,7 +64,11 @@ export default function PrivacyPolicyPage() {
               Employer accounts additionally provide a company name and, optionally, other
               company details such as a website. Job listings submitted by an employer, and the
               association between an employer account and the company it represents, are stored
-              so listings can be reviewed, published, and managed.
+              so listings can be reviewed, published, and managed. Some listings are instead
+              brought in from an authorized external job source rather than submitted by an
+              employer account — for these, we store only the public job details and the name of
+              the company the listing is attributed to; no employer account or private company
+              data exists for a listing sourced this way.
             </p>
           </PolicySection>
 
@@ -79,11 +83,13 @@ export default function PrivacyPolicyPage() {
 
           <PolicySection title="4. Cookies">
             <p>
-              The platform uses a strictly necessary session cookie to keep you signed in. This
-              cookie is required for the platform to function and is not used for advertising or
-              cross-site tracking. If non-essential cookies (for analytics or advertising) are
-              introduced in the future, they will only be set with your consent, presented before
-              any such cookie is placed.
+              The platform uses a strictly necessary session cookie to keep you signed in; this
+              cookie is required for the platform to function. In production, the platform also
+              uses Google Analytics to understand aggregate site usage (see &quot;Analytics&quot;
+              below), which sets its own cookies for that purpose. These analytics cookies are not
+              currently presented behind a consent banner; you can limit them using your
+              browser&apos;s own cookie or tracking-protection settings. Cookies are not used to
+              serve advertising on this platform today.
             </p>
           </PolicySection>
 
@@ -104,24 +110,26 @@ export default function PrivacyPolicyPage() {
             </p>
           </PolicySection>
 
-          <PolicySection title="7. Analytics (future)">
+          <PolicySection title="7. Analytics">
             <p>
-              The platform does not currently use any analytics or measurement tool. If basic
-              analytics (such as page views or aggregate traffic sources) are introduced in the
-              future, this policy will be updated first, and any non-essential analytics cookie
-              will be gated behind the cookie consent described above.
+              The platform uses Google Analytics to understand aggregate site usage — for
+              example, which pages are visited and general traffic patterns. This runs only in
+              the live production environment, never during development or automated testing.
+              Analytics data is used in aggregate to understand how the platform is used; we do
+              not use it to build individually-targeted advertising profiles. If the scope of
+              analytics used on this platform changes materially, this policy will be updated.
             </p>
           </PolicySection>
 
-          <PolicySection title="8. AI processing (future)">
+          <PolicySection title="8. AI-assisted processing">
             <p>
-              The platform is developing an AI-assisted moderation capability intended to help
-              review job listings for consistency, duplicates, and quality signals before
-              publication. This capability is not active in production today, and no job listing
-              is currently published automatically without human review. If and when it is
-              activated, only the structured job-listing fields an employer submits — never
-              candidate data — would be sent for AI analysis, and this policy will be updated to
-              describe that processing before it goes live.
+              Jobnura uses AI-assisted checks as part of reviewing job listings — assessing
+              things like content quality, potential duplicates, and whether a listing&apos;s
+              category and location can be confidently identified. A listing that clearly passes
+              every automated and AI check may be published without an additional manual review
+              step; anything less certain is queued for a person on our team to review before it
+              is published. Only the structured job-listing fields a listing already contains —
+              never candidate data — are ever sent for this analysis.
             </p>
           </PolicySection>
 

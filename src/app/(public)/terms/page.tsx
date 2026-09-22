@@ -6,7 +6,7 @@ import { getConfiguredSiteUrl } from "@/lib/siteUrl";
 
 const TITLE = "Terms of Service";
 const DESCRIPTION = "The terms governing use of Jobnura by candidates, employers, and administrators.";
-const LAST_UPDATED = "17 September 2026";
+const LAST_UPDATED = "22 September 2026";
 const siteUrl = getConfiguredSiteUrl();
 const path = "/terms";
 
@@ -60,6 +60,10 @@ export default function TermsPage() {
               <li>Job listings must describe a real, currently available position at a real company.</li>
               <li>You must have the authority to post on behalf of the company you represent.</li>
               <li>Listing details (title, description, location, category, and how to apply) must be accurate.</li>
+              <li>
+                If candidates apply through your own external system rather than on Jobnura, that
+                link must lead directly to a real, working application process for the listed role.
+              </li>
               <li>You are responsible for reviewing and responding to applications you receive.</li>
             </ul>
           </PolicySection>
@@ -78,7 +82,9 @@ export default function TermsPage() {
               ownership of their profile information. By submitting content to the platform, you
               grant us the right to display, store, and process it as necessary to operate the
               platform — for example, showing a job listing to candidates, or an application to
-              the employer who received it.
+              the employer who received it. Some listings on Jobnura are instead brought in from
+              an authorized external job source rather than submitted directly by an employer; each
+              such listing is clearly attributed to the company and source it came from.
             </p>
           </PolicySection>
 
@@ -95,20 +101,25 @@ export default function TermsPage() {
 
           <PolicySection title="6. Moderation">
             <p>
-              Every job listing is reviewed before it becomes publicly visible. We may reject,
-              request changes to, or remove a listing that does not meet these terms, at our
-              reasonable discretion, and we may keep a record of that decision for accountability
-              purposes.
+              Every job listing — whether submitted directly by an employer or brought in from an
+              authorized external source — passes through automated checks (for duplicates,
+              missing information, and content that doesn&apos;t belong on a job board) before it
+              can become publicly visible. A listing that doesn&apos;t clearly pass every check is
+              held for a person on our team to review; we may reject, request changes to, or remove
+              a listing that does not meet these terms, at our reasonable discretion, and we keep a
+              record of moderation decisions for accountability purposes.
             </p>
           </PolicySection>
 
           <PolicySection title="7. AI-assisted moderation">
             <p>
-              We are developing AI-assisted tools to help our team review listings more
-              consistently. Where AI assistance is used, it supports — and does not replace — a
-              human decision on whether a listing is published, rejected, or requires more
-              information; final publishing decisions remain accountable to our moderation
-              process, not to an automated system acting alone.
+              AI-assisted checks are part of how listings are reviewed — assessing things like
+              content quality, potential duplicates, and whether a listing&apos;s category and
+              location can be confidently identified. A listing that clearly passes every automated
+              and AI check may be published without an additional manual review step; anything less
+              certain is queued for a person on our team to decide. Final publishing decisions
+              remain accountable to our moderation process, not to an automated system acting alone
+              on a listing it flagged as uncertain.
             </p>
           </PolicySection>
 

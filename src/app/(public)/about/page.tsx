@@ -39,8 +39,9 @@ export default function AboutPage() {
           <p className="text-lg text-muted-foreground">
             We built this platform on a simple idea: finding a real job — and finding the right
             person to fill one — shouldn&apos;t depend on which country you happen to be searching
-            from. Every listing here comes directly from a real, accountable employer, reviewed
-            before it ever reaches a candidate.
+            from. Every listing is attributed to the real company behind it — whether posted
+            directly by that employer or brought in from an authorized job source — and passes
+            through review before it reaches a candidate.
           </p>
         </div>
       </Section>
@@ -61,7 +62,7 @@ export default function AboutPage() {
             <h2 className="text-xl font-semibold text-foreground">Our vision</h2>
             <p className="text-muted-foreground">
               A single, trustworthy place to search for work across multiple countries and
-              industries, where every listing is attributable to a real employer and every
+              industries, where every listing is attributable to a real company and every
               candidate profile represents a real person — no aggregated noise, no recycled
               content.
             </p>
@@ -114,28 +115,30 @@ export default function AboutPage() {
         </h2>
         <div className="grid gap-6 sm:grid-cols-2">
           <Card padding="lg" className="flex flex-col gap-3">
-            <h3 className="text-lg font-semibold text-foreground">Employer-first publishing</h3>
+            <h3 className="text-lg font-semibold text-foreground">Real listings, clearly sourced</h3>
             <p className="text-muted-foreground">
-              Every listing on the platform is submitted directly by the employer offering the
-              role. We don&apos;t import, scrape, or republish job content from other sites — if a
-              listing is here, a real employer put it here and stands behind it.
+              Most listings are submitted directly by the employer offering the role. Jobnura also
+              includes listings brought in from authorized external sources, such as Adzuna — these
+              are clearly attributed to where they came from, and we never fabricate or invent a
+              listing ourselves.
             </p>
           </Card>
           <Card padding="lg" className="flex flex-col gap-3">
             <h3 className="text-lg font-semibold text-foreground">Reviewed before publishing</h3>
             <p className="text-muted-foreground">
-              New listings are held for review before they appear publicly. We check for
-              duplicates, missing information, and content that doesn&apos;t belong on a job
-              board before a listing goes live — not after.
+              Every listing — however it reaches Jobnura — passes through automated checks for
+              duplicates, missing information, and content that doesn&apos;t belong on a job board
+              before it can appear publicly. A listing that doesn&apos;t clearly pass every check is
+              held for a person on our team to review before it goes live.
             </p>
           </Card>
           <Card padding="lg" className="flex flex-col gap-3">
-            <h3 className="text-lg font-semibold text-foreground">A growing role for AI</h3>
+            <h3 className="text-lg font-semibold text-foreground">AI-assisted review</h3>
             <p className="text-muted-foreground">
-              We&apos;re building AI-assisted moderation to help our team review listings faster
-              and more consistently. It&apos;s an emerging capability we&apos;re developing
-              carefully, not a replacement for human judgment — a person remains accountable for
-              every publishing decision today.
+              AI-assisted checks are part of how we review listings — helping assess quality,
+              duplicates, and whether the job details make sense. A listing that clearly passes
+              every automated and AI check may be published without an additional manual step;
+              anything less certain is queued for a person on our team to decide.
             </p>
           </Card>
           <Card padding="lg" className="flex flex-col gap-3">
