@@ -10,6 +10,15 @@ export type GetPublicJobsOptions = {
   countryUrlSlug?: string;
   /** Restrict results to one category by its slug (see src/constants/categories.ts). */
   categorySlug?: string;
+  /**
+   * Restrict results to ANY of these categories (an OR across slugs) —
+   * for a hub page spanning several explicit categories at once (e.g.
+   * the Oil & Gas hub: oil-gas, petroleum, drilling, offshore). Used
+   * instead of, not together with, `categorySlug`; if both happen to be
+   * set, both conditions apply (AND), which is never what a caller
+   * actually wants, so callers should only ever pass one or the other.
+   */
+  categorySlugs?: string[];
   /** Case-insensitive substring match against title or description. */
   keywords?: string;
   /** Restrict results to one company by its real Company.id — used by the company profile page's "open jobs" list. */
@@ -56,7 +65,9 @@ export function normalizePublicJobsPage(page: number | undefined): number {
  * one filter definition, never duplicated, so the two can never
  * silently drift apart and disagree on what counts as a match.
  */
-function buildPublicJobsFilter(options: Pick<GetPublicJobsOptions, "countryUrlSlug" | "categorySlug" | "keywords" | "companyId">): Prisma.JobWhereInput {
+function buildPublicJobsFilter(
+  options: Pick<GetPublicJobsOptions, "countryUrlSlug" | "categorySlug" | "categorySlugs" | "keywords" | "companyId">
+): Prisma.JobWhereInput {
   const keywords = options.keywords?.trim();
   return {
     // The one centralized "is this Job publicly visible" rule (see
@@ -80,6 +91,9 @@ function buildPublicJobsFilter(options: Pick<GetPublicJobsOptions, "countryUrlSl
     ],
     ...(options.countryUrlSlug ? { country: { urlSlug: options.countryUrlSlug } } : {}),
     ...(options.categorySlug ? { category: { slug: options.categorySlug } } : {}),
+    ...(options.categorySlugs && options.categorySlugs.length > 0
+      ? { category: { slug: { in: options.categorySlugs } } }
+      : {}),
     ...(options.companyId ? { companyId: options.companyId } : {}),
   };
 }

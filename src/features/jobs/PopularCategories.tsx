@@ -19,7 +19,12 @@ export function PopularCategories() {
         {featuredCategories.map((category) => (
           <li key={category.slug}>
             <Link
-              href={`/category/${category.slug}`}
+              // The Oil & Gas grid item points at its own dedicated hub
+              // (aggregating Oil & Gas, Petroleum, Drilling, and
+              // Offshore, plus real hiring countries/companies) rather
+              // than the single-category page every other item still
+              // uses — see src/app/(public)/oil-and-gas/page.tsx.
+              href={category.slug === "oil-gas" ? "/oil-and-gas" : `/category/${category.slug}`}
               className="block rounded-lg border border-border bg-surface px-4 py-3.5 text-sm font-medium text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
             >
               {category.name}

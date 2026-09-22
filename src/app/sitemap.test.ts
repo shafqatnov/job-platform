@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import sitemap from "@/app/sitemap";
 import { prisma } from "@/lib/prisma";
 import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
+import { OIL_AND_GAS_CATEGORY_SLUGS } from "@/services/jobs/getOilAndGasHub";
 import {
   createModerationTestFixtures,
   createTestJob,
@@ -215,6 +216,66 @@ describe("sitemap (real dev database, temporary fixtures)", () => {
       expect(entries).not.toContain(`https://sitemap-test.invalid/category/${emptyCategory.slug}`);
     } finally {
       await prisma.job.delete({ where: { id: fixtureJob.id } });
+    }
+  });
+
+  it("12 & 13. the Oil & Gas hub automatically appears in and disappears from the sitemap as its only qualifying job is created and removed", async () => {
+    const hubUrl = "https://sitemap-test.invalid/oil-and-gas";
+    const oilGasCategory = await prisma.category.findUniqueOrThrow({ where: { slug: OIL_AND_GAS_CATEGORY_SLUGS[0] }, select: { id: true } });
+    const existingJob = await prisma.job.findFirst({
+      where: { AND: [publicJobVisibilityWhere(), { category: { slug: { in: [...OIL_AND_GAS_CATEGORY_SLUGS] } } }] },
+      select: { id: true },
+    });
+    if (existingJob) {
+      // The real dev DB already has a qualifying job — confirm the hub
+      // is present, without forcing the 0->1 transition on top of it.
+      expect(urls(await sitemap())).toContain(hubUrl);
+      return;
+    }
+
+    expect(urls(await sitemap())).not.toContain(hubUrl);
+
+    const job = await createJobInCategory(fixtures, oilGasCategory.id, "[AI MODERATION TEST] Newly Sitemap-Eligible Oil & Gas Hub");
+    expect(urls(await sitemap())).toContain(hubUrl);
+
+    await prisma.job.delete({ where: { id: job.id } });
+    expect(urls(await sitemap())).not.toContain(hubUrl);
+  });
+
+  it("a disposable test-fixture-marker job does not make an otherwise-empty Oil & Gas hub appear in the sitemap", async () => {
+    const existingJob = await prisma.job.findFirst({
+      where: { AND: [publicJobVisibilityWhere(), { category: { slug: { in: [...OIL_AND_GAS_CATEGORY_SLUGS] } } }] },
+      select: { id: true },
+    });
+    if (existingJob) {
+      return;
+    }
+    const oilGasCategory = await prisma.category.findUniqueOrThrow({ where: { slug: OIL_AND_GAS_CATEGORY_SLUGS[0] }, select: { id: true } });
+    const fixtureJob = await createJobInCategory(fixtures, oilGasCategory.id, "[IMPORT TEST] Should Not Appear In Oil & Gas Hub");
+    try {
+      expect(urls(await sitemap())).not.toContain("https://sitemap-test.invalid/oil-and-gas");
+    } finally {
+      await prisma.job.delete({ where: { id: fixtureJob.id } });
+    }
+  });
+
+  it("a Mechanical Engineering job never makes the Oil & Gas hub appear in the sitemap — it is not a qualifying category", async () => {
+    const existingJob = await prisma.job.findFirst({
+      where: { AND: [publicJobVisibilityWhere(), { category: { slug: { in: [...OIL_AND_GAS_CATEGORY_SLUGS] } } }] },
+      select: { id: true },
+    });
+    if (existingJob) {
+      return;
+    }
+    const mechanicalEngineering = await prisma.category.findUniqueOrThrow({
+      where: { slug: "mechanical-engineering" },
+      select: { id: true },
+    });
+    const job = await createJobInCategory(fixtures, mechanicalEngineering.id, "[AI MODERATION TEST] Unrelated Category Check");
+    try {
+      expect(urls(await sitemap())).not.toContain("https://sitemap-test.invalid/oil-and-gas");
+    } finally {
+      await prisma.job.delete({ where: { id: job.id } });
     }
   });
 });

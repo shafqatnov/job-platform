@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { COUNTRIES } from "@/constants/countries";
 import { getPublicJobsForSitemap } from "@/services/jobs/getPublicJobsForSitemap";
 import { getPublicCompaniesForSitemap } from "@/services/jobs/getPublicCompaniesForSitemap";
+import { OIL_AND_GAS_CATEGORY_SLUGS } from "@/services/jobs/getOilAndGasHub";
 import { getSiteOrigin } from "@/lib/siteUrl";
 
 /**
@@ -37,6 +38,11 @@ import { getSiteOrigin } from "@/lib/siteUrl";
  *    all categories" needed at all (unlike countries, which need
  *    COUNTRIES to know every valid slug up front) since a category with
  *    no jobs simply never appears in that job list to begin with.
+ *  - /oil-and-gas, only when at least one currently public job is in one
+ *    of the explicit Oil & Gas hub categories (see getOilAndGasHub.ts's
+ *    own OIL_AND_GAS_CATEGORY_SLUGS) — derived from the SAME job list,
+ *    zero additional queries. Excluded when empty, exactly like an empty
+ *    category, and reappears automatically the instant it qualifies.
  *
  * Deliberately excluded: /sign-in, /sign-up (utility pages, marked
  * noindex on the page itself), and every /admin, /employer, /candidate,
@@ -96,5 +102,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  return [...staticEntries, ...countryEntries, ...jobEntries, ...companyEntries, ...categoryEntries];
+  // Same job list, checked against the hub's own explicit category
+  // scope — no separate query, and no risk of ever double-listing the
+  // hub (this is a single boolean-gated push, not a per-category loop).
+  const oilAndGasSlugs: readonly string[] = OIL_AND_GAS_CATEGORY_SLUGS;
+  const hasOilAndGasJobs = jobs.some((job) => oilAndGasSlugs.includes(job.categorySlug));
+  const oilAndGasEntries: MetadataRoute.Sitemap = hasOilAndGasJobs
+    ? [{ url: `${baseUrl}/oil-and-gas`, lastModified: now, changeFrequency: "hourly", priority: 0.7 }]
+    : [];
+
+  return [
+    ...staticEntries,
+    ...countryEntries,
+    ...jobEntries,
+    ...companyEntries,
+    ...categoryEntries,
+    ...oilAndGasEntries,
+  ];
 }
