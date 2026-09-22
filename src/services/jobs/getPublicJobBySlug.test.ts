@@ -74,4 +74,12 @@ describe("getPublicJobBySlug test-fixture exclusion (real dev database, temporar
     const result = await getPublicJobBySlug({ countryUrlSlug, jobSlug: jobRow.slug });
     expect(result?.id).toBe(job.id);
   });
+
+  it("an orphaned [AI MODERATION TEST] job (createdAt backdated past a real test run's lifetime) is not reachable by its own slug", async () => {
+    const job = await createTestJob(fixtures, { title: "[AI MODERATION TEST] Orphaned Detail Page Job", status: "active" });
+    const jobRow = await prisma.job.findUniqueOrThrow({ where: { id: job.id }, select: { slug: true } });
+    await prisma.job.update({ where: { id: job.id }, data: { createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) } });
+    const result = await getPublicJobBySlug({ countryUrlSlug, jobSlug: jobRow.slug });
+    expect(result).toBeNull();
+  });
 });

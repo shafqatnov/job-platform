@@ -62,6 +62,19 @@ describe("getPublicCompanyBySlug (real dev database, temporary fixtures)", () =>
     }
   });
 
+  it("3b. a company whose only job is an orphaned [AI MODERATION TEST] fixture (createdAt backdated) also returns null", async () => {
+    const isolatedFixtures = await createModerationTestFixtures();
+    try {
+      const job = await createTestJob(isolatedFixtures, { title: "[AI MODERATION TEST] Orphaned Company Job", status: "active" });
+      await prisma.job.update({ where: { id: job.id }, data: { createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) } });
+      const company = await prisma.company.findUniqueOrThrow({ where: { id: isolatedFixtures.companyId }, select: { slug: true } });
+      const result = await getPublicCompanyBySlug(company.slug);
+      expect(result).toBeNull();
+    } finally {
+      await cleanupModerationTestFixtures(isolatedFixtures);
+    }
+  });
+
   it("4. a company with a genuine active job resolves, with correct name/openJobCount/hiring aggregates", async () => {
     const job = await createTestJob(fixtures, { title: "[AI MODERATION TEST] Company Profile Fixture Job", status: "active" });
     try {

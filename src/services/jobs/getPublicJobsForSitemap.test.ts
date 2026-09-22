@@ -50,4 +50,16 @@ describe("getPublicJobsForSitemap test-fixture exclusion (real dev database, tem
       await prisma.job.delete({ where: { id: job.id } });
     }
   });
+
+  it("an orphaned [AI MODERATION TEST] job (createdAt backdated past a real test run's lifetime) never appears in the sitemap", async () => {
+    const job = await createTestJob(fixtures, { title: "[AI MODERATION TEST] Orphaned Sitemap Job", status: "active" });
+    const jobRow = await prisma.job.findUniqueOrThrow({ where: { id: job.id }, select: { slug: true } });
+    await prisma.job.update({ where: { id: job.id }, data: { createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) } });
+    try {
+      const result = await getPublicJobsForSitemap();
+      expect(slugsOf(result)).not.toContain(jobRow.slug);
+    } finally {
+      await prisma.job.delete({ where: { id: job.id } });
+    }
+  });
 });

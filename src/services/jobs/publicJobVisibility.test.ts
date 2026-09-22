@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
@@ -40,5 +41,125 @@ describe("publicJobVisibilityWhere", () => {
     } finally {
       await cleanupModerationTestFixtures(fixtures);
     }
+  });
+
+  it("a [GH LOCATION WIRING TEST] job (like the two other title markers) is excluded even while active", async () => {
+    const fixtures = await createModerationTestFixtures();
+    try {
+      const job = await createTestJob(fixtures, { title: "[GH LOCATION WIRING TEST] Backend Engineer", status: "active" });
+      const visibleIds = (
+        await prisma.job.findMany({ where: publicJobVisibilityWhere(), select: { id: true } })
+      ).map((j) => j.id);
+      expect(visibleIds).not.toContain(job.id);
+    } finally {
+      await cleanupModerationTestFixtures(fixtures);
+    }
+  });
+
+  /**
+   * The orphaned-disposable-fixture safeguard (DISPOSABLE_TEST_POSTER_EMAIL_SUFFIX
+   * + ORPHANED_TEST_FIXTURE_MAX_AGE_MS in publicJobVisibility.ts). This is the
+   * fix for the actual reported production leak: a "[AI MODERATION TEST]" job
+   * whose test process never ran its cleanup. Backdating createdAt (rather than
+   * waiting a real hour) is the same "simulate elapsed time deterministically"
+   * technique this codebase already uses for expiresAt-based tests.
+   */
+  describe("orphaned disposable-fixture safeguard (real dev database, temporary fixtures)", () => {
+    it("an [AI MODERATION TEST] job stays visible while fresh (existing tests rely on this)", async () => {
+      const fixtures = await createModerationTestFixtures();
+      try {
+        const job = await createTestJob(fixtures, { title: "[AI MODERATION TEST] Fresh Fixture", status: "active" });
+        const visibleIds = (
+          await prisma.job.findMany({ where: publicJobVisibilityWhere(), select: { id: true } })
+        ).map((j) => j.id);
+        expect(visibleIds).toContain(job.id);
+      } finally {
+        await cleanupModerationTestFixtures(fixtures);
+      }
+    });
+
+    it("an [AI MODERATION TEST] job becomes excluded once orphaned (createdAt older than the safety threshold)", async () => {
+      const fixtures = await createModerationTestFixtures();
+      try {
+        const job = await createTestJob(fixtures, { title: "[AI MODERATION TEST] Orphaned Fixture", status: "active" });
+        await prisma.job.update({
+          where: { id: job.id },
+          data: { createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+        });
+        const visibleIds = (
+          await prisma.job.findMany({ where: publicJobVisibilityWhere(), select: { id: true } })
+        ).map((j) => j.id);
+        expect(visibleIds).not.toContain(job.id);
+      } finally {
+        await cleanupModerationTestFixtures(fixtures);
+      }
+    });
+
+    it("generalizes to ANY future @example.invalid-posted fixture, not just the known bracketed markers", async () => {
+      const fixtures = await createModerationTestFixtures();
+      try {
+        const job = await createTestJob(fixtures, {
+          title: "Totally Ordinary Job Title With No Bracketed Marker At All",
+          status: "active",
+        });
+        await prisma.job.update({
+          where: { id: job.id },
+          data: { createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+        });
+        const visibleIds = (
+          await prisma.job.findMany({ where: publicJobVisibilityWhere(), select: { id: true } })
+        ).map((j) => j.id);
+        expect(visibleIds).not.toContain(job.id);
+      } finally {
+        await cleanupModerationTestFixtures(fixtures);
+      }
+    });
+
+    it("never excludes a job posted by a non-@example.invalid (i.e. real-shaped) user, no matter how old", async () => {
+      const fixtures = await createModerationTestFixtures();
+      // A one-off poster whose email does NOT end in "@example.invalid" —
+      // simulating a genuine account, distinct from this suite's own
+      // disposable fixture user, to prove the age check alone (with a
+      // real-shaped poster) never excludes anything.
+      const realShapedUser = await prisma.user.create({
+        data: {
+          email: `public-job-visibility-test-real-shaped-${crypto.randomUUID()}@jobnura-test.com`,
+          name: "Real-Shaped Poster",
+          role: "employer",
+          status: "active",
+          emailVerified: false,
+        },
+        select: { id: true },
+      });
+      try {
+        const job = await prisma.job.create({
+          data: {
+            companyId: fixtures.companyId,
+            countryId: fixtures.countryId,
+            cityId: fixtures.cityId,
+            categoryId: fixtures.categoryId,
+            postedByUserId: realShapedUser.id,
+            title: "Test Inspector",
+            description: "A temporary automated-test job simulating a real, non-fixture poster.",
+            slug: `real-shaped-poster-test-${crypto.randomUUID()}`,
+            status: "active",
+            applicationMethod: "on_platform",
+            createdAt: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000),
+          },
+          select: { id: true },
+        });
+        try {
+          const visibleIds = (
+            await prisma.job.findMany({ where: publicJobVisibilityWhere(), select: { id: true } })
+          ).map((j) => j.id);
+          expect(visibleIds).toContain(job.id);
+        } finally {
+          await prisma.job.delete({ where: { id: job.id } });
+        }
+      } finally {
+        await prisma.user.delete({ where: { id: realShapedUser.id } });
+        await cleanupModerationTestFixtures(fixtures);
+      }
+    });
   });
 });
