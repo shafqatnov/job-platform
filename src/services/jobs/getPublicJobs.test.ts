@@ -1,6 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { getPublicJobs, hasPublicJobsInCountry } from "@/services/jobs/getPublicJobs";
+import {
+  getPublicJobs,
+  hasPublicJobsInCountry,
+  countPublicJobs,
+  normalizePublicJobsPage,
+  getPublicJobsPaginationInfo,
+  PUBLIC_JOBS_PAGE_SIZE,
+} from "@/services/jobs/getPublicJobs";
 import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
 import {
   createModerationTestFixtures,
@@ -434,5 +441,175 @@ describe("hasPublicJobsInCountry (real dev database, temporary fixtures)", () =>
 
     await prisma.job.delete({ where: { id: job.id } });
     expect(await hasPublicJobsInCountry(emptyCountry.urlSlug)).toBe(false);
+  });
+});
+
+describe("normalizePublicJobsPage", () => {
+  it("14. defaults to 1 for undefined, 0, negative, and non-numeric (NaN) input", () => {
+    expect(normalizePublicJobsPage(undefined)).toBe(1);
+    expect(normalizePublicJobsPage(0)).toBe(1);
+    expect(normalizePublicJobsPage(-1)).toBe(1);
+    expect(normalizePublicJobsPage(Number("abc"))).toBe(1);
+  });
+
+  it("floors a non-integer page down to the nearest whole page", () => {
+    expect(normalizePublicJobsPage(2.9)).toBe(2);
+  });
+
+  it("15. passes through a large, otherwise-valid page number unchanged (out-of-range is the caller's decision, not clamped here)", () => {
+    expect(normalizePublicJobsPage(9999)).toBe(9999);
+  });
+});
+
+describe("getPublicJobsPaginationInfo", () => {
+  it("5 & 6. reports hasPreviousPage/hasNextPage correctly across the first, a middle, and the last page", () => {
+    // 50 results at 24/page -> 3 pages (24, 24, 2).
+    expect(getPublicJobsPaginationInfo(1, 50)).toEqual({
+      currentPage: 1,
+      totalPages: 3,
+      hasPreviousPage: false,
+      hasNextPage: true,
+    });
+    expect(getPublicJobsPaginationInfo(2, 50)).toEqual({
+      currentPage: 2,
+      totalPages: 3,
+      hasPreviousPage: true,
+      hasNextPage: true,
+    });
+    expect(getPublicJobsPaginationInfo(3, 50)).toEqual({
+      currentPage: 3,
+      totalPages: 3,
+      hasPreviousPage: true,
+      hasNextPage: false,
+    });
+  });
+
+  it("4. a totalCount of 0 is still exactly 1 total page, with no previous/next", () => {
+    expect(getPublicJobsPaginationInfo(1, 0)).toEqual({
+      currentPage: 1,
+      totalPages: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+  });
+
+  it("15. a page number beyond the last real page reports hasNextPage: false and a previous page that exists", () => {
+    expect(getPublicJobsPaginationInfo(9999, 50)).toEqual({
+      currentPage: 9999,
+      totalPages: 3,
+      hasPreviousPage: true,
+      hasNextPage: false,
+    });
+  });
+});
+
+/**
+ * getPublicJobs/countPublicJobs pagination (real dev database, temporary
+ * fixtures). Isolated entirely via a fresh fixture's own companyId — a
+ * brand-new Company row createModerationTestFixtures() creates has zero
+ * pre-existing jobs, so filtering by companyId here can never pick up
+ * real, unrelated production-like data (no need to also isolate by
+ * country/category, which are shared reference rows).
+ */
+describe("getPublicJobs/countPublicJobs pagination (real dev database, temporary fixtures)", () => {
+  let fixtures: ModerationTestFixtures;
+  const jobIds: string[] = [];
+  const TOTAL_FIXTURE_JOBS = PUBLIC_JOBS_PAGE_SIZE + 1; // one full page plus one — the smallest count that proves a real second page.
+
+  beforeAll(async () => {
+    fixtures = await createModerationTestFixtures();
+    const baseTime = Date.now();
+    // Distinct, strictly descending postedAt per job (one second apart)
+    // makes the resulting order fully predictable: index 0 is the most
+    // recently posted and so appears first (orderBy postedAt desc),
+    // index TOTAL_FIXTURE_JOBS - 1 appears last.
+    for (let i = 0; i < TOTAL_FIXTURE_JOBS; i++) {
+      const job = await prisma.job.create({
+        data: {
+          companyId: fixtures.companyId,
+          countryId: fixtures.countryId,
+          cityId: fixtures.cityId,
+          categoryId: fixtures.categoryId,
+          postedByUserId: fixtures.userId,
+          title: `[AI MODERATION TEST] Pagination Fixture Job ${i}`,
+          description: "A temporary automated-test job for the pagination tests.",
+          slug: `pagination-test-${i}-${crypto.randomUUID()}`,
+          status: "active",
+          applicationMethod: "on_platform",
+          postedAt: new Date(baseTime - i * 1000),
+        },
+        select: { id: true },
+      });
+      jobIds.push(job.id);
+    }
+  });
+
+  afterAll(async () => {
+    await cleanupModerationTestFixtures(fixtures);
+  });
+
+  it("1. the first page returns exactly PUBLIC_JOBS_PAGE_SIZE results, in the expected (most-recently-posted-first) order", async () => {
+    const page1 = await getPublicJobs({ companyId: fixtures.companyId, page: 1 });
+    expect(page1).toHaveLength(PUBLIC_JOBS_PAGE_SIZE);
+    expect(page1.map((job) => job.id)).toEqual(jobIds.slice(0, PUBLIC_JOBS_PAGE_SIZE));
+  });
+
+  it("2. page 2 returns exactly the next (remaining) set", async () => {
+    const page2 = await getPublicJobs({ companyId: fixtures.companyId, page: 2 });
+    expect(page2).toHaveLength(1);
+    expect(page2[0].id).toBe(jobIds[PUBLIC_JOBS_PAGE_SIZE]);
+  });
+
+  it("3. adjacent pages never overlap", async () => {
+    const [page1, page2] = await Promise.all([
+      getPublicJobs({ companyId: fixtures.companyId, page: 1 }),
+      getPublicJobs({ companyId: fixtures.companyId, page: 2 }),
+    ]);
+    const page1Ids = new Set(page1.map((job) => job.id));
+    expect(page2.every((job) => !page1Ids.has(job.id))).toBe(true);
+  });
+
+  it("4. countPublicJobs reports the correct total, unaffected by which page is requested", async () => {
+    const total = await countPublicJobs({ companyId: fixtures.companyId });
+    expect(total).toBe(TOTAL_FIXTURE_JOBS);
+  });
+
+  it("14. an invalid page value (0, negative, or non-numeric) safely falls back to page 1's results, never throwing", async () => {
+    const page1 = await getPublicJobs({ companyId: fixtures.companyId, page: 1 });
+    const zero = await getPublicJobs({ companyId: fixtures.companyId, page: 0 });
+    const negative = await getPublicJobs({ companyId: fixtures.companyId, page: -5 });
+    const nan = await getPublicJobs({ companyId: fixtures.companyId, page: Number("abc") });
+    expect(zero.map((j) => j.id)).toEqual(page1.map((j) => j.id));
+    expect(negative.map((j) => j.id)).toEqual(page1.map((j) => j.id));
+    expect(nan.map((j) => j.id)).toEqual(page1.map((j) => j.id));
+  });
+
+  it("15. a page number far beyond the last page returns an empty array, never an error", async () => {
+    const beyond = await getPublicJobs({ companyId: fixtures.companyId, page: 9999 });
+    expect(beyond).toEqual([]);
+  });
+
+  it("16. ordering is deterministic across repeated calls for the same page (postedAt desc, id desc tiebreak)", async () => {
+    const first = await getPublicJobs({ companyId: fixtures.companyId, page: 1 });
+    const second = await getPublicJobs({ companyId: fixtures.companyId, page: 1 });
+    expect(first.map((j) => j.id)).toEqual(second.map((j) => j.id));
+  });
+
+  it("7. category filter remains correct on a paginated call (companyId + categorySlug combined)", async () => {
+    const category = await prisma.category.findUniqueOrThrow({ where: { id: fixtures.categoryId }, select: { slug: true } });
+    const page1 = await getPublicJobs({ companyId: fixtures.companyId, categorySlug: category.slug, page: 1 });
+    expect(page1).toHaveLength(PUBLIC_JOBS_PAGE_SIZE);
+    expect(page1.map((j) => j.id)).toEqual(jobIds.slice(0, PUBLIC_JOBS_PAGE_SIZE));
+  });
+
+  it("8. keyword filter remains correct on a paginated call", async () => {
+    const page1 = await getPublicJobs({ companyId: fixtures.companyId, keywords: "Pagination Fixture", page: 1 });
+    expect(page1).toHaveLength(PUBLIC_JOBS_PAGE_SIZE);
+  });
+
+  it("9. country filter remains correct on a paginated call", async () => {
+    const country = await prisma.country.findUniqueOrThrow({ where: { id: fixtures.countryId }, select: { urlSlug: true } });
+    const page1 = await getPublicJobs({ companyId: fixtures.companyId, countryUrlSlug: country.urlSlug, page: 1 });
+    expect(page1).toHaveLength(PUBLIC_JOBS_PAGE_SIZE);
   });
 });

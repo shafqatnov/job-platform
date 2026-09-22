@@ -9,7 +9,7 @@ import { JobFiltersBar } from "@/features/jobs/JobFiltersBar";
 import { JobCard } from "@/features/jobs/JobCard";
 import type { SaveState } from "@/features/jobs/SaveJobButton";
 import { SORT_OPTIONS } from "@/features/jobs/constants";
-import { getPublicJobs } from "@/services/jobs/getPublicJobs";
+import { getPublicJobs, countPublicJobs, normalizePublicJobsPage, getPublicJobsPaginationInfo } from "@/services/jobs/getPublicJobs";
 import { getCountryByCode, type CountryOption } from "@/constants/countries";
 import { getSessionUser } from "@/services/auth/getSessionUser";
 import { getCandidateProfile } from "@/services/candidates/getCandidateProfile";
@@ -26,6 +26,17 @@ export type JobListingFilters = {
   countryCode?: string;
   /** Raw category slug (searchParams "category"). */
   categorySlug?: string;
+  /**
+   * Raw Work Mode / Employment Type values (searchParams "workMode" /
+   * "employmentType"). Not applied as real filters — there is still no
+   * workMode/employmentType column on Job (see getPublicJobs.ts's own
+   * doc comment) — carried through only so a visitor's selection isn't
+   * silently dropped from the URL when moving between pagination pages.
+   */
+  workMode?: string;
+  employmentType?: string;
+  /** Raw 1-based page number (searchParams "page"), not yet sanitized — normalizePublicJobsPage handles 0/negative/non-numeric/absent. */
+  page?: number;
 };
 
 export type JobsListingViewProps = {
@@ -34,6 +45,27 @@ export type JobsListingViewProps = {
   /** Parsed from the current page's searchParams — see both jobs page.tsx files. */
   filters?: JobListingFilters;
 };
+
+/**
+ * Builds the URL for a given target page, preserving every currently
+ * supported query parameter (country query param only applies to the
+ * unscoped /jobs route — the country-scoped route carries its country
+ * in the URL segment instead, never as a query param) except `page`
+ * itself, which is set to the target page (page 1 omits it entirely, so
+ * the first page's URL stays exactly what it already was before
+ * pagination existed).
+ */
+function buildPageHref(basePath: string, filters: JobListingFilters | undefined, isCountryScoped: boolean, targetPage: number): string {
+  const params = new URLSearchParams();
+  if (!isCountryScoped && filters?.countryCode) params.set("country", filters.countryCode);
+  if (filters?.categorySlug) params.set("category", filters.categorySlug);
+  if (filters?.keywords) params.set("q", filters.keywords);
+  if (filters?.workMode) params.set("workMode", filters.workMode);
+  if (filters?.employmentType) params.set("employmentType", filters.employmentType);
+  if (targetPage > 1) params.set("page", String(targetPage));
+  const query = params.toString();
+  return query ? `${basePath}?${query}` : basePath;
+}
 
 /**
  * Shared presentation for both /jobs and /{country}/jobs. Reads
@@ -50,12 +82,24 @@ export async function JobsListingView({ country, filters }: JobsListingViewProps
   // is disabled on that route for exactly this reason, so in practice
   // filters?.countryCode is never set there anyway.
   const resolvedCountry = country ?? (filters?.countryCode ? getCountryByCode(filters.countryCode) : undefined);
+  const basePath = country ? `/${country.slug}/jobs` : "/jobs";
 
-  const jobs = await getPublicJobs({
+  const page = normalizePublicJobsPage(filters?.page);
+  const listingFilters = {
     countryUrlSlug: resolvedCountry?.slug,
     categorySlug: filters?.categorySlug,
     keywords: filters?.keywords,
-  });
+  };
+
+  const [jobs, totalCount] = await Promise.all([
+    getPublicJobs({ ...listingFilters, page }),
+    countPublicJobs(listingFilters),
+  ]);
+  const { totalPages, hasPreviousPage, hasNextPage } = getPublicJobsPaginationInfo(page, totalCount);
+  // Jobs genuinely exist for this filter combination, but the requested
+  // page is past the last one that has any (e.g. ?page=9999) — a
+  // different, more useful message than "no jobs yet at all".
+  const isPageBeyondResults = totalCount > 0 && jobs.length === 0;
 
   // Save-button state for every card on this page, computed once (not
   // per card) to avoid an N+1 query: a single batched lookup of which
@@ -101,7 +145,7 @@ export async function JobsListingView({ country, filters }: JobsListingViewProps
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground" aria-live="polite">
-            {jobs.length} {jobs.length === 1 ? "job" : "jobs"} found
+            {totalCount} {totalCount === 1 ? "job" : "jobs"} found
           </p>
           <Select
             label="Sort by"
@@ -115,12 +159,31 @@ export async function JobsListingView({ country, filters }: JobsListingViewProps
 
         {jobs.length === 0 ? (
           <EmptyState
-            title={country ? `No jobs published in ${country.name} yet` : "No jobs published yet"}
-            description="New listings will appear here as soon as employers start posting. Check back soon, or be the first to post a role."
+            title={
+              isPageBeyondResults
+                ? "No more jobs on this page"
+                : country
+                  ? `No jobs published in ${country.name} yet`
+                  : "No jobs published yet"
+            }
+            description={
+              isPageBeyondResults
+                ? "You've gone past the last page of results."
+                : "New listings will appear here as soon as employers start posting. Check back soon, or be the first to post a role."
+            }
             action={
-              <Link href="/employer" className={getButtonClassName({ variant: "outline", size: "sm" })}>
-                Post a job
-              </Link>
+              isPageBeyondResults ? (
+                <Link
+                  href={buildPageHref(basePath, filters, Boolean(country), 1)}
+                  className={getButtonClassName({ variant: "outline", size: "sm" })}
+                >
+                  Back to page 1
+                </Link>
+              ) : (
+                <Link href="/employer" className={getButtonClassName({ variant: "outline", size: "sm" })}>
+                  Post a job
+                </Link>
+              )
             }
           />
         ) : (
@@ -133,7 +196,14 @@ export async function JobsListingView({ country, filters }: JobsListingViewProps
           </ul>
         )}
 
-        <Pagination currentPage={1} totalPages={1} />
+        {totalPages > 1 ? (
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            previousHref={hasPreviousPage ? buildPageHref(basePath, filters, Boolean(country), page - 1) : undefined}
+            nextHref={hasNextPage ? buildPageHref(basePath, filters, Boolean(country), page + 1) : undefined}
+          />
+        ) : null}
       </div>
     </Section>
   );

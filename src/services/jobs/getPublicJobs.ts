@@ -1,4 +1,5 @@
 import { cache } from "react";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { JobListItem } from "@/features/jobs/types";
 import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
@@ -13,9 +14,75 @@ export type GetPublicJobsOptions = {
   keywords?: string;
   /** Restrict results to one company by its real Company.id — used by the company profile page's "open jobs" list. */
   companyId?: string;
+  /**
+   * 1-based page number for the public jobs listing. Defaults to 1 —
+   * every existing caller that never passes this (the company profile
+   * page's open-jobs list, the job-detail page's related jobs, the
+   * category page's job list) keeps getting exactly the same first
+   * PUBLIC_JOBS_PAGE_SIZE results as before this option existed.
+   * Sanitized via normalizePublicJobsPage — an invalid value (0,
+   * negative, non-numeric) is treated as page 1, never thrown or
+   * guessed at.
+   */
+  page?: number;
 };
 
-const PUBLIC_JOBS_PAGE_SIZE = 24;
+/** Public, so callers (JobsListingView's own pagination math) can compute total pages without duplicating this number. */
+export const PUBLIC_JOBS_PAGE_SIZE = 24;
+
+/**
+ * Sanitizes a raw page number (e.g. parsed from a URL's ?page= query
+ * param, which can arrive as 0, negative, non-numeric/NaN, or a huge
+ * out-of-range integer) into a safe 1-based page index. Never throws,
+ * never guesses beyond "clamp to the nearest valid page" — an
+ * out-of-range-but-otherwise-valid page number (e.g. 9999 when only 3
+ * pages of results exist) is deliberately NOT clamped down to the last
+ * real page here: that decision belongs to the caller (it may want to
+ * show a genuine empty result + noindex, rather than silently
+ * substituting different content for the URL the visitor/crawler asked
+ * for).
+ */
+export function normalizePublicJobsPage(page: number | undefined): number {
+  if (page === undefined || !Number.isFinite(page) || page < 1) {
+    return 1;
+  }
+  return Math.floor(page);
+}
+
+/**
+ * The shared "is this Job part of this listing" filter, used by both
+ * getPublicJobs() (fetches the current page's rows) and
+ * countPublicJobs() (counts all matching rows, for pagination math) —
+ * one filter definition, never duplicated, so the two can never
+ * silently drift apart and disagree on what counts as a match.
+ */
+function buildPublicJobsFilter(options: Pick<GetPublicJobsOptions, "countryUrlSlug" | "categorySlug" | "keywords" | "companyId">): Prisma.JobWhereInput {
+  const keywords = options.keywords?.trim();
+  return {
+    // The one centralized "is this Job publicly visible" rule (see
+    // publicJobVisibility.ts) is nested as its own AND-array entry —
+    // rather than spread at the top level — specifically so it can
+    // never collide with this function's own top-level `OR` key below
+    // (a plain object literal keeps only the last `OR`; each
+    // independent OR-condition needs its own array entry instead).
+    AND: [
+      publicJobVisibilityWhere(),
+      ...(keywords
+        ? [
+            {
+              OR: [
+                { title: { contains: keywords, mode: "insensitive" as const } },
+                { description: { contains: keywords, mode: "insensitive" as const } },
+              ],
+            },
+          ]
+        : []),
+    ],
+    ...(options.countryUrlSlug ? { country: { urlSlug: options.countryUrlSlug } } : {}),
+    ...(options.categorySlug ? { category: { slug: options.categorySlug } } : {}),
+    ...(options.companyId ? { companyId: options.companyId } : {}),
+  };
+}
 
 /**
  * Reads the currently publishable jobs for the public jobs listing.
@@ -49,9 +116,18 @@ const PUBLIC_JOBS_PAGE_SIZE = 24;
  * intentionally not caught here: a genuine database failure must
  * propagate to the route's error boundary, not be silently presented as
  * "no jobs."
+ *
+ * Paginated via `options.page` (1-based, defaults to 1) — `skip`/`take`
+ * on the same query, never a second query system. Ordering
+ * (postedAt desc, then id desc as a tiebreaker) was already fully
+ * deterministic before pagination existed — postedAt alone could tie
+ * for two jobs published in the same instant, but id is a globally
+ * unique UUID, so the combined order can never produce an inconsistent
+ * page boundary (a job silently duplicated across two pages, or
+ * silently skipped between them).
  */
 export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise<JobListItem[]> {
-  const keywords = options.keywords?.trim();
+  const page = normalizePublicJobsPage(options.page);
 
   // One cheap, indexed lookup per call (never per job) — see
   // adzunaAttribution.ts. Resolves to null when no Adzuna source row
@@ -60,30 +136,7 @@ export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise
   const adzunaSourceId = await findAdzunaSourceId();
 
   const jobs = await prisma.job.findMany({
-    where: {
-      // The one centralized "is this Job publicly visible" rule (see
-      // publicJobVisibility.ts) is nested as its own AND-array entry —
-      // rather than spread at the top level — specifically so it can
-      // never collide with this function's own top-level `OR` key below
-      // (a plain object literal keeps only the last `OR`; each
-      // independent OR-condition needs its own array entry instead).
-      AND: [
-        publicJobVisibilityWhere(),
-        ...(keywords
-          ? [
-              {
-                OR: [
-                  { title: { contains: keywords, mode: "insensitive" as const } },
-                  { description: { contains: keywords, mode: "insensitive" as const } },
-                ],
-              },
-            ]
-          : []),
-      ],
-      ...(options.countryUrlSlug ? { country: { urlSlug: options.countryUrlSlug } } : {}),
-      ...(options.categorySlug ? { category: { slug: options.categorySlug } } : {}),
-      ...(options.companyId ? { companyId: options.companyId } : {}),
-    },
+    where: buildPublicJobsFilter(options),
     select: {
       id: true,
       slug: true,
@@ -99,6 +152,7 @@ export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise
       city: { select: { name: true } },
     },
     orderBy: [{ postedAt: "desc" }, { id: "desc" }],
+    skip: (page - 1) * PUBLIC_JOBS_PAGE_SIZE,
     take: PUBLIC_JOBS_PAGE_SIZE,
   });
 
@@ -124,6 +178,47 @@ export async function getPublicJobs(options: GetPublicJobsOptions = {}): Promise
       isAdzunaSourced: adzunaSourceId !== null && job.importedSourceId === adzunaSourceId,
     })
   );
+}
+
+/**
+ * Total count of jobs matching the same filters getPublicJobs() would
+ * apply (country/category/company/keywords — `page` is deliberately not
+ * part of this options type, since a total count has no page of its
+ * own) — what JobsListingView needs to compute total pages / hasNextPage
+ * / hasPreviousPage without ever fetching the full result set just to
+ * measure it. A single indexed COUNT query, never a table scan.
+ */
+export async function countPublicJobs(
+  options: Omit<GetPublicJobsOptions, "page"> = {}
+): Promise<number> {
+  return prisma.job.count({ where: buildPublicJobsFilter(options) });
+}
+
+export type PublicJobsPaginationInfo = {
+  currentPage: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+};
+
+/**
+ * The pure arithmetic a listing page needs to render pagination
+ * controls, given the already-normalized current page and the real
+ * total count from countPublicJobs() — no DB access itself, so it's
+ * directly unit-testable without a request context (unlike
+ * JobsListingView, which cannot be called directly in a test because it
+ * also reads the signed-in session via next/headers). A totalCount of 0
+ * still reports totalPages: 1 (never 0) so "page 1 of 1" is always a
+ * valid, sensible thing to display even for a genuinely empty listing.
+ */
+export function getPublicJobsPaginationInfo(currentPage: number, totalCount: number): PublicJobsPaginationInfo {
+  const totalPages = Math.max(1, Math.ceil(totalCount / PUBLIC_JOBS_PAGE_SIZE));
+  return {
+    currentPage,
+    totalPages,
+    hasPreviousPage: currentPage > 1,
+    hasNextPage: currentPage < totalPages,
+  };
 }
 
 /**
