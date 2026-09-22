@@ -66,8 +66,8 @@ export default async function HomePage() {
             </span>
           </h1>
           <p className="max-w-xl text-lg text-muted-foreground">
-            Search real, employer-posted roles across multiple countries and industries — no
-            recycled listings, no noise.
+            Search real roles across multiple countries and industries, each tied to a real
+            company — no recycled listings, no noise.
           </p>
         </div>
 
