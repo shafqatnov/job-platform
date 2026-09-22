@@ -5,6 +5,7 @@ import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { AdSlot } from "@/components/AdSlot";
 import { getButtonClassName } from "@/components/Button";
+import { Breadcrumbs, type BreadcrumbItem } from "@/components/Breadcrumbs";
 import { JobCard } from "@/features/jobs/JobCard";
 import { ApplyButton, type ApplyState } from "@/features/jobs/ApplyButton";
 import { SaveJobButton, type SaveState } from "@/features/jobs/SaveJobButton";
@@ -14,6 +15,7 @@ import type { JobListItem } from "@/features/jobs/types";
 
 export type JobDetailViewProps = {
   job: PublicJobDetail;
+  breadcrumbItems: BreadcrumbItem[];
   /** Other publishable jobs in the same country, current job already excluded. */
   relatedJobs: JobListItem[];
   /** Only meaningful when applicationMethod is on_platform — see ApplyButton. */
@@ -61,13 +63,15 @@ function getApplyButtonLabel(job: Pick<PublicJobDetail, "isAdzunaSourced">): str
   return "Apply on company site";
 }
 
-export function JobDetailView({ job, relatedJobs, applyState, saveState, createProfileHref }: JobDetailViewProps) {
+export function JobDetailView({ job, breadcrumbItems, relatedJobs, applyState, saveState, createProfileHref }: JobDetailViewProps) {
   const salary = formatSalary(job);
   const hasExternalUrl = job.applicationMethod === "external_url" && Boolean(job.externalApplicationUrl);
 
   return (
     <>
       <Section aria-labelledby="job-title">
+        <Breadcrumbs items={breadcrumbItems} />
+
         <div className="mb-8 flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="neutral">{job.categoryName}</Badge>

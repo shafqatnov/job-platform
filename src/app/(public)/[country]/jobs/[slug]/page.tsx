@@ -11,6 +11,34 @@ import { isJobSaved } from "@/services/candidates/isJobSaved";
 import type { ApplyState } from "@/features/jobs/ApplyButton";
 import type { SaveState } from "@/features/jobs/SaveJobButton";
 import { getConfiguredSiteUrl } from "@/lib/siteUrl";
+import { breadcrumbJsonLd, type BreadcrumbItem } from "@/components/Breadcrumbs";
+import type { PublicJobDetail } from "@/services/jobs/getPublicJobBySlug";
+
+/**
+ * Home -> {Country} Jobs -> {Category} -> {Job title}, mirroring
+ * CompanyProfilePage's own breadcrumb construction exactly (same
+ * Breadcrumbs component, same breadcrumbJsonLd helper). The country link
+ * reuses the existing canonical /{country}/jobs page; the category link
+ * reuses that same page's existing, already-supported ?category= filter
+ * (see [country]/jobs/page.tsx) — never an invented route. The category
+ * breadcrumb is only included when genuinely present on this job
+ * (categoryId is a required column, but this stays defensive rather than
+ * assuming the type never lies). A pure function (no DB/request access)
+ * so it can be unit tested directly.
+ */
+export function buildJobBreadcrumbItems(
+  country: { slug: string; name: string },
+  job: Pick<PublicJobDetail, "title" | "categorySlug" | "categoryName">
+): BreadcrumbItem[] {
+  return [
+    { label: "Home", href: "/" },
+    { label: `${country.name} Jobs`, href: `/${country.slug}/jobs` },
+    ...(job.categorySlug && job.categoryName
+      ? [{ label: job.categoryName, href: `/${country.slug}/jobs?category=${job.categorySlug}` }]
+      : []),
+    { label: job.title },
+  ];
+}
 
 export async function generateMetadata({
   params,
@@ -140,14 +168,21 @@ export default async function JobDetailPage({
   // sequence) can break out of this script tag.
   const jobPostingJsonLdString = JSON.stringify(jobPostingJsonLd).replace(/</g, "\\u003c");
 
+  const siteUrl = getConfiguredSiteUrl();
+  const breadcrumbItems = buildJobBreadcrumbItems(country, job);
+  const breadcrumbListJsonLd = breadcrumbJsonLd(breadcrumbItems, siteUrl);
+  const breadcrumbJsonLdString = JSON.stringify(breadcrumbListJsonLd).replace(/</g, "\\u003c");
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jobPostingJsonLdString }}
       />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumbJsonLdString }} />
       <JobDetailView
         job={job}
+        breadcrumbItems={breadcrumbItems}
         relatedJobs={relatedJobs}
         applyState={applyState}
         saveState={saveState}
