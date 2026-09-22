@@ -29,6 +29,44 @@ async function findCountryWithNoPublicJobs(
   return null;
 }
 
+/** Finds a real Category row (other than the given id) with zero currently-public jobs, or null if every category has at least one. */
+async function findCategoryWithNoPublicJobs(
+  excludeCategoryId: string
+): Promise<{ id: string; slug: string } | null> {
+  const categories = await prisma.category.findMany({
+    where: { id: { not: excludeCategoryId } },
+    select: { id: true, slug: true },
+  });
+  for (const category of categories) {
+    const job = await prisma.job.findFirst({
+      where: { AND: [publicJobVisibilityWhere(), { categoryId: category.id }] },
+      select: { id: true },
+    });
+    if (!job) {
+      return category;
+    }
+  }
+  return null;
+}
+
+async function createJobInCategory(fixtures: ModerationTestFixtures, categoryId: string, title: string) {
+  return prisma.job.create({
+    data: {
+      companyId: fixtures.companyId,
+      countryId: fixtures.countryId,
+      cityId: fixtures.cityId,
+      categoryId,
+      postedByUserId: fixtures.userId,
+      title,
+      description: "A temporary automated-test job for the sitemap category tests.",
+      slug: `sitemap-category-test-${crypto.randomUUID()}`,
+      status: "active",
+      applicationMethod: "on_platform",
+    },
+    select: { id: true },
+  });
+}
+
 function urls(entries: Awaited<ReturnType<typeof sitemap>>): string[] {
   return entries.map((entry) => entry.url);
 }
@@ -128,5 +166,55 @@ describe("sitemap (real dev database, temporary fixtures)", () => {
 
     await prisma.job.delete({ where: { id: job.id } });
     expect(urls(await sitemap())).not.toContain(countryUrl);
+  });
+
+  it("10. a category with at least one active public job is included as /category/{slug}", async () => {
+    const job = await createTestJob(fixtures, { title: "[AI MODERATION TEST] Sitemap Category Inclusion Check", status: "active" });
+    const category = await prisma.category.findUniqueOrThrow({ where: { id: fixtures.categoryId }, select: { slug: true } });
+    try {
+      const entries = urls(await sitemap());
+      expect(entries).toContain(`https://sitemap-test.invalid/category/${category.slug}`);
+    } finally {
+      await prisma.job.delete({ where: { id: job.id } });
+    }
+  });
+
+  it("11. a category with genuinely zero public jobs is excluded from the sitemap", async () => {
+    const emptyCategory = await findCategoryWithNoPublicJobs(fixtures.categoryId);
+    if (!emptyCategory) {
+      return;
+    }
+    const entries = urls(await sitemap());
+    expect(entries).not.toContain(`https://sitemap-test.invalid/category/${emptyCategory.slug}`);
+  });
+
+  it("a category automatically appears in and disappears from the sitemap as its only public job is created and removed", async () => {
+    const emptyCategory = await findCategoryWithNoPublicJobs(fixtures.categoryId);
+    if (!emptyCategory) {
+      return;
+    }
+    const categoryUrl = `https://sitemap-test.invalid/category/${emptyCategory.slug}`;
+
+    expect(urls(await sitemap())).not.toContain(categoryUrl);
+
+    const job = await createJobInCategory(fixtures, emptyCategory.id, "[AI MODERATION TEST] Newly Sitemap-Eligible Category");
+    expect(urls(await sitemap())).toContain(categoryUrl);
+
+    await prisma.job.delete({ where: { id: job.id } });
+    expect(urls(await sitemap())).not.toContain(categoryUrl);
+  });
+
+  it("a disposable test-fixture-marker job does not make its otherwise-empty category appear in the sitemap", async () => {
+    const emptyCategory = await findCategoryWithNoPublicJobs(fixtures.categoryId);
+    if (!emptyCategory) {
+      return;
+    }
+    const fixtureJob = await createJobInCategory(fixtures, emptyCategory.id, "[IMPORT TEST] Should Not Appear");
+    try {
+      const entries = urls(await sitemap());
+      expect(entries).not.toContain(`https://sitemap-test.invalid/category/${emptyCategory.slug}`);
+    } finally {
+      await prisma.job.delete({ where: { id: fixtureJob.id } });
+    }
   });
 });

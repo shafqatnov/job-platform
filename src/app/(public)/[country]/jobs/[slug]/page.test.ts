@@ -30,11 +30,11 @@ describe("buildJobBreadcrumbItems", () => {
     expect(items[1]).toEqual({ label: "United Kingdom Jobs", href: "/uk/jobs" });
   });
 
-  it("4. the category breadcrumb is included when the job has a real category, using the existing ?category= filter (never an invented route)", () => {
+  it("4. the category breadcrumb is included when the job has a real category, linking to its own canonical /category/{slug} page (never an invented route)", () => {
     const items = buildJobBreadcrumbItems(country, jobWithCategory);
     expect(items[2]).toEqual({
       label: "Mechanical Engineering",
-      href: "/uk/jobs?category=mechanical-engineering",
+      href: "/category/mechanical-engineering",
     });
   });
 
@@ -52,7 +52,7 @@ describe("buildJobBreadcrumbItems", () => {
     expect(items).toEqual([
       { label: "Home", href: "/" },
       { label: "United Kingdom Jobs", href: "/uk/jobs" },
-      { label: "Mechanical Engineering", href: "/uk/jobs?category=mechanical-engineering" },
+      { label: "Mechanical Engineering", href: "/category/mechanical-engineering" },
       { label: "Mobile Vehicle Technician" },
     ]);
   });
@@ -79,9 +79,7 @@ describe("job detail breadcrumb structured data", () => {
     });
     expect(jsonLd.itemListElement[0].item).toBe("https://www.jobnura.com/");
     expect(jsonLd.itemListElement[1].item).toBe("https://www.jobnura.com/uk/jobs");
-    expect(jsonLd.itemListElement[2].item).toBe(
-      "https://www.jobnura.com/uk/jobs?category=mechanical-engineering"
-    );
+    expect(jsonLd.itemListElement[2].item).toBe("https://www.jobnura.com/category/mechanical-engineering");
   });
 
   it("5 & 6. the final (job title) item has no `item` URL, per the existing BreadcrumbList convention for the current page", () => {

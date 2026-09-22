@@ -19,7 +19,7 @@ export function PopularCategories() {
         {featuredCategories.map((category) => (
           <li key={category.slug}>
             <Link
-              href={`/jobs?category=${category.slug}`}
+              href={`/category/${category.slug}`}
               className="block rounded-lg border border-border bg-surface px-4 py-3.5 text-sm font-medium text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
             >
               {category.name}

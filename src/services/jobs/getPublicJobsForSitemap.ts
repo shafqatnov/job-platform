@@ -4,6 +4,7 @@ import { publicJobVisibilityWhere } from "@/services/jobs/publicJobVisibility";
 export type SitemapJobEntry = {
   slug: string;
   countryUrlSlug: string;
+  categorySlug: string;
   updatedAt: Date;
 };
 
@@ -20,7 +21,10 @@ const SITEMAP_JOB_LIMIT = 5000;
  * publicJobVisibility.ts, the one shared source of truth for this rule
  * (status = active, not soft-deleted, not past expiry, not a known
  * disposable test-fixture) — so a search engine can never index a
- * leftover test job either.
+ * leftover test job either. Also carries each job's own countryUrlSlug
+ * and categorySlug so sitemap.ts can derive "which countries/categories
+ * currently have public jobs" from this same result set, with zero
+ * additional queries.
  */
 export async function getPublicJobsForSitemap(): Promise<SitemapJobEntry[]> {
   const jobs = await prisma.job.findMany({
@@ -29,6 +33,7 @@ export async function getPublicJobsForSitemap(): Promise<SitemapJobEntry[]> {
       slug: true,
       updatedAt: true,
       country: { select: { urlSlug: true } },
+      category: { select: { slug: true } },
     },
     orderBy: { postedAt: "desc" },
     take: SITEMAP_JOB_LIMIT,
@@ -37,6 +42,7 @@ export async function getPublicJobsForSitemap(): Promise<SitemapJobEntry[]> {
   return jobs.map((job) => ({
     slug: job.slug,
     countryUrlSlug: job.country.urlSlug,
+    categorySlug: job.category.slug,
     updatedAt: job.updatedAt,
   }));
 }

@@ -27,6 +27,16 @@ import { getSiteOrigin } from "@/lib/siteUrl";
  *    company with zero real open jobs has no indexable page today
  *    (getPublicCompanyBySlug.ts returns null for it), so it's never
  *    listed here either.
+ *  - /category/{slug} for every real Category (see prisma/schema.prisma)
+ *    that currently has at least one publicly visible job — an empty
+ *    category is excluded here (and gets its own conditional noindex,
+ *    see /category/[slug]/page.tsx's generateMetadata) but stays a
+ *    genuinely valid, resolvable, 200-status page; it reappears here the
+ *    instant it has a real job. Derived from the SAME job list already
+ *    fetched below — zero additional queries, and no separate "list of
+ *    all categories" needed at all (unlike countries, which need
+ *    COUNTRIES to know every valid slug up front) since a category with
+ *    no jobs simply never appears in that job list to begin with.
  *
  * Deliberately excluded: /sign-in, /sign-up (utility pages, marked
  * noindex on the page itself), and every /admin, /employer, /candidate,
@@ -66,6 +76,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
+  // Distinct categorySlugs already present in the same job list above —
+  // a category with zero public jobs is simply never one of these
+  // values, so no separate existence check or full-category-list query
+  // is needed.
+  const categoriesWithJobs = new Set(jobs.map((job) => job.categorySlug));
+  const categoryEntries: MetadataRoute.Sitemap = Array.from(categoriesWithJobs).map((categorySlug) => ({
+    url: `${baseUrl}/category/${categorySlug}`,
+    lastModified: now,
+    changeFrequency: "hourly",
+    priority: 0.6,
+  }));
+
   const companies = await getPublicCompaniesForSitemap();
   const companyEntries: MetadataRoute.Sitemap = companies.map((company) => ({
     url: `${baseUrl}/company/${company.slug}`,
@@ -74,5 +96,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  return [...staticEntries, ...countryEntries, ...jobEntries, ...companyEntries];
+  return [...staticEntries, ...countryEntries, ...jobEntries, ...companyEntries, ...categoryEntries];
 }

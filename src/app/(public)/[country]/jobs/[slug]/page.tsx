@@ -19,12 +19,15 @@ import type { PublicJobDetail } from "@/services/jobs/getPublicJobBySlug";
  * CompanyProfilePage's own breadcrumb construction exactly (same
  * Breadcrumbs component, same breadcrumbJsonLd helper). The country link
  * reuses the existing canonical /{country}/jobs page; the category link
- * reuses that same page's existing, already-supported ?category= filter
- * (see [country]/jobs/page.tsx) — never an invented route. The category
- * breadcrumb is only included when genuinely present on this job
- * (categoryId is a required column, but this stays defensive rather than
- * assuming the type never lies). A pure function (no DB/request access)
- * so it can be unit tested directly.
+ * points to the category's own canonical /category/{slug} landing page
+ * (see src/app/(public)/category/[slug]/page.tsx) rather than the older
+ * /{country}/jobs?category= query-parameter filter, per that page's own
+ * "use canonical category URLs where a landing page exists" goal — the
+ * query-parameter filter itself is untouched and still works. The
+ * category breadcrumb is only included when genuinely present on this
+ * job (categoryId is a required column, but this stays defensive rather
+ * than assuming the type never lies). A pure function (no DB/request
+ * access) so it can be unit tested directly.
  */
 export function buildJobBreadcrumbItems(
   country: { slug: string; name: string },
@@ -34,7 +37,7 @@ export function buildJobBreadcrumbItems(
     { label: "Home", href: "/" },
     { label: `${country.name} Jobs`, href: `/${country.slug}/jobs` },
     ...(job.categorySlug && job.categoryName
-      ? [{ label: job.categoryName, href: `/${country.slug}/jobs?category=${job.categorySlug}` }]
+      ? [{ label: job.categoryName, href: `/category/${job.categorySlug}` }]
       : []),
     { label: job.title },
   ];
