@@ -2,13 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Section } from "@/components/Section";
 import { Card } from "@/components/Card";
-import { Badge } from "@/components/Badge";
-import { EmptyState } from "@/components/EmptyState";
 import { getButtonClassName } from "@/components/Button";
+import { EmployerJobList } from "@/features/employers/EmployerJobList";
 import { getSessionUser } from "@/services/auth/getSessionUser";
 import { getEmployerCompany } from "@/services/employers/getEmployerCompany";
 import { getEmployerJobs } from "@/services/jobs/getEmployerJobs";
-import { JOB_STATUS_LABELS, JOB_STATUS_VARIANTS } from "@/constants/jobStatus";
 
 export const metadata: Metadata = {
   title: "Employer Dashboard",
@@ -28,6 +26,12 @@ export default async function EmployerDashboardPage({
   const justPosted = (await searchParams).posted === "1";
 
   const postJobHref = employerCompany ? "/employer/jobs/new" : "/employer/company/new";
+
+  // All derived from the same single jobs read above — no additional
+  // queries — exactly the real, current counts by status.
+  const activeCount = jobs.filter((job) => job.status === "active").length;
+  const pendingCount = jobs.filter((job) => job.status === "pending_review").length;
+  const totalApplications = jobs.reduce((sum, job) => sum + job.applicationCount, 0);
 
   return (
     <Section aria-labelledby="employer-dashboard-heading">
@@ -56,42 +60,42 @@ export default async function EmployerDashboardPage({
         </p>
       ) : null}
 
+      {employerCompany ? (
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Link href="/employer/jobs/active" className="block">
+            <Card padding="lg" className="h-full transition-colors hover:border-brand-600">
+              <p className="text-sm text-muted-foreground">Active jobs</p>
+              <p className="text-2xl font-semibold text-foreground">{activeCount}</p>
+            </Card>
+          </Link>
+          <Link href="/employer/jobs/pending" className="block">
+            <Card padding="lg" className="h-full transition-colors hover:border-brand-600">
+              <p className="text-sm text-muted-foreground">Pending review</p>
+              <p className="text-2xl font-semibold text-foreground">{pendingCount}</p>
+            </Card>
+          </Link>
+          <Link href="/employer/applications" className="block">
+            <Card padding="lg" className="h-full transition-colors hover:border-brand-600">
+              <p className="text-sm text-muted-foreground">Total applications</p>
+              <p className="text-2xl font-semibold text-foreground">{totalApplications}</p>
+            </Card>
+          </Link>
+          <Link href="/employer/analytics" className="block">
+            <Card padding="lg" className="h-full transition-colors hover:border-brand-600">
+              <p className="text-sm text-muted-foreground">Analytics</p>
+              <p className="text-2xl font-semibold text-foreground">View</p>
+            </Card>
+          </Link>
+        </div>
+      ) : null}
+
       <Card padding="lg">
         <h2 className="mb-4 text-lg font-semibold text-foreground">Your job listings</h2>
-        {jobs.length === 0 ? (
-          <EmptyState
-            title="No jobs posted yet"
-            description="Once you publish your first listing, it will appear here for you to manage."
-          />
-        ) : (
-          <ul className="flex flex-col divide-y divide-border">
-            {jobs.map((job) => (
-              <li key={job.id} className="flex flex-col gap-1.5 py-4 first:pt-0 last:pb-0">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="font-medium text-foreground">{job.title}</span>
-                  <Badge variant={JOB_STATUS_VARIANTS[job.status]}>{JOB_STATUS_LABELS[job.status]}</Badge>
-                </div>
-                {job.status === "rejected" && job.rejectionReason ? (
-                  <p className="text-sm text-muted-foreground">Reason: {job.rejectionReason}</p>
-                ) : null}
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  <Link
-                    href={`/employer/jobs/${job.id}/applications`}
-                    className="text-sm font-medium text-brand-600 hover:text-brand-700"
-                  >
-                    {job.applicationCount} {job.applicationCount === 1 ? "application" : "applications"}
-                  </Link>
-                  <Link
-                    href={`/employer/jobs/${job.id}`}
-                    className="text-sm font-medium text-brand-600 hover:text-brand-700"
-                  >
-                    Manage
-                  </Link>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <EmployerJobList
+          jobs={jobs}
+          emptyTitle="No jobs posted yet"
+          emptyDescription="Once you publish your first listing, it will appear here for you to manage."
+        />
       </Card>
     </Section>
   );
