@@ -6,6 +6,7 @@ export type CandidateApplicationRow = {
   jobTitle: string;
   jobSlug: string;
   countrySlug: string;
+  countryName: string;
   companyName: string;
   appliedDate: string;
   status: ApplicationStatus;
@@ -38,7 +39,7 @@ export async function getApplicationsForCandidate(candidateProfileId: string): P
         select: {
           title: true,
           slug: true,
-          country: { select: { urlSlug: true } },
+          country: { select: { urlSlug: true, name: true } },
           company: { select: { name: true } },
         },
       },
@@ -51,6 +52,7 @@ export async function getApplicationsForCandidate(candidateProfileId: string): P
     jobTitle: application.job.title,
     jobSlug: application.job.slug,
     countrySlug: application.job.country.urlSlug,
+    countryName: application.job.country.name,
     companyName: application.job.company.name,
     appliedDate: application.createdAt.toISOString(),
     status: application.status,

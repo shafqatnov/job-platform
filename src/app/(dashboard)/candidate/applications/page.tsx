@@ -97,7 +97,9 @@ export default async function CandidateApplicationsPage() {
                   >
                     {application.jobTitle}
                   </Link>
-                  <p className="text-sm text-muted-foreground">{application.companyName}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {application.companyName} &middot; {application.countryName}
+                  </p>
                 </div>
                 <span className="text-sm text-muted-foreground">
                   Applied {dateFormatter.format(new Date(application.appliedDate))}

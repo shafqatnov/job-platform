@@ -24,6 +24,7 @@ describe("getApplicationsForCandidate (real dev database, temporary fixtures)", 
   let jobTitle: string;
   let companyName: string;
   let countrySlug: string;
+  let countryName: string;
   let beforeApply: Date;
 
   beforeAll(async () => {
@@ -42,12 +43,13 @@ describe("getApplicationsForCandidate (real dev database, temporary fixtures)", 
     const [jobRecord, company] = await Promise.all([
       prisma.job.findUniqueOrThrow({
         where: { id: jobId },
-        select: { slug: true, country: { select: { urlSlug: true } } },
+        select: { slug: true, country: { select: { urlSlug: true, name: true } } },
       }),
       prisma.company.findUniqueOrThrow({ where: { id: jobFixtures.companyId }, select: { name: true } }),
     ]);
     jobSlug = jobRecord.slug;
     countrySlug = jobRecord.country.urlSlug;
+    countryName = jobRecord.country.name;
     companyName = company.name;
 
     beforeApply = new Date();
@@ -70,6 +72,7 @@ describe("getApplicationsForCandidate (real dev database, temporary fixtures)", 
       jobTitle,
       jobSlug,
       countrySlug,
+      countryName,
       companyName,
       status: "received",
     });
