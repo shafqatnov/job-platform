@@ -5,6 +5,7 @@ import { Card } from "@/components/Card";
 import { getButtonClassName } from "@/components/Button";
 import { listAdminJobs } from "@/services/admin/listAdminJobs";
 import { listPendingImportedJobReviews } from "@/services/admin/listImportedJobReviews";
+import { listPendingLocationReviews } from "@/services/admin/locationReviews";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard",
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
 export default async function AdminDashboardPage() {
   const pendingJobs = await listAdminJobs({ status: "pending_review" });
   const pendingImportedJobs = await listPendingImportedJobReviews();
+  const pendingLocationReviews = await listPendingLocationReviews();
 
   return (
     <Section aria-labelledby="admin-dashboard-heading">
@@ -61,6 +63,20 @@ export default async function AdminDashboardPage() {
             className={getButtonClassName({ variant: "outline", className: "self-start" })}
           >
             Review imported jobs
+          </Link>
+        </Card>
+
+        <Card padding="lg" className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold text-foreground">Unknown locations</h2>
+          <p className="text-muted-foreground">
+            {pendingLocationReviews.length} imported {pendingLocationReviews.length === 1 ? "job is" : "jobs are"}{" "}
+            waiting on a location to be resolved before they can publish.
+          </p>
+          <Link
+            href="/admin/unknown-locations"
+            className={getButtonClassName({ variant: "outline", className: "self-start" })}
+          >
+            Resolve unknown locations
           </Link>
         </Card>
       </div>

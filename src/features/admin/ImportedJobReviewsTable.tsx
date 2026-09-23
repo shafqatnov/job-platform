@@ -87,6 +87,11 @@ function ImportedJobReviewCard({ review }: { review: ImportedJobReviewRow }) {
           {approveState.error}
         </p>
       ) : null}
+      {approveState.info ? (
+        <p role="status" className="text-sm text-warning-700">
+          {approveState.info}
+        </p>
+      ) : null}
       {rejectState.error ? (
         <p role="alert" className="text-sm text-danger-600">
           {rejectState.error}
