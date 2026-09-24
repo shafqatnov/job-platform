@@ -1,5 +1,17 @@
 # Oil & Gas market City coverage — GeoNames import (2026-09-24)
 
+## Execution record
+
+Executed 2026-09-24 via `npx prisma db execute --file import.sql`. Result
+matched the preview exactly: 6,685 rows inserted (Oman 42, Bahrain 12,
+Brazil 5,344, Nigeria 913, Angola 350, Guyana 24), total `City` row
+count went from 11,750 to 18,435, and every other country's row count
+was independently confirmed unchanged (11,750 across all non-target
+countries, before and after). Spot-checked post-insert: Muscat,
+Manama, São Paulo, Georgetown, Lagos, Luanda all present and correctly
+attributed; Wantage (unrelated, UK) still absent as expected — this
+import never touches the UK.
+
 ## Why
 
 A location-reference-data audit found that six countries relevant to
