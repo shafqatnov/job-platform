@@ -211,19 +211,61 @@ export type OilAndGasSyncBudget = {
 };
 
 /**
- * Phase 1 rollout budget: 8 countries x 7 profiles = 56 combinations;
- * a 20-request rotating window covers the whole matrix roughly every 3
- * sync cycles (~18 hours) at 4 cycles/day, comfortably inside Adzuna's
- * documented 250 hits/day limit (20 requests x 4 cycles/day = 80/day,
- * well under 250) with substantial headroom left for the existing
- * legacy runAdzunaImporter() path and normal manual admin sync
- * clicks. maxNewCandidatesPerRun=100 is set relative to the current
- * genuine pending-review backlog (~100 real Adzuna reviews) — a single
- * run should not be able to more than double it outright.
+ * Right-sized after production run #17 (commit 827b3f7) hit Vercel's
+ * FUNCTION_INVOCATION_TIMEOUT (~5m4s, HTTP 504) at the original
+ * maxRequestsPerRun=20 / maxNewCandidatesPerRun=100. Root cause (see
+ * that task's own investigation): every stage in this pipeline is
+ * fully sequential (deliberately — never Promise.all, so this never
+ * bursts Adzuna or OpenAI), and both external calls it makes carry a
+ * 15s timeout (adzunaConnector.ts's own REQUEST_TIMEOUT_MS,
+ * normalizeImportedJob.ts's own REQUEST_TIMEOUT_MS) with the OpenAI
+ * call also carrying maxRetries: 1 (so a single slow/failed
+ * normalization can cost up to ~30s). At 100 sequential candidates,
+ * even ordinary (non-worst-case) per-call latency was already enough
+ * to exceed the ~300s Hobby ceiling — no bug, no accidental loop, just
+ * too much sequential network-bound work for one invocation.
+ *
+ * No real production latency telemetry was available to calibrate this
+ * precisely (no Vercel log access) — the values below are a
+ * conservative estimate, not a measurement, using the code's own
+ * documented worst-case (15s timeout, 1 retry) alongside a
+ * deliberately-labeled "typical successful call" assumption (a few
+ * seconds), which is a reasonable estimate for a moderate structured-
+ * output completion, not something this codebase has itself measured.
+ *
+ * maxNewCandidatesPerRun=30 (previously 100): sized so that even a
+ * "some calls hit worst-case, most don't" mixed scenario for the
+ * OpenAI stage — a realistic bad-day mix, not the (mutually exclusive
+ * with "any candidates exist at all") every-call-times-out extreme —
+ * leaves the overall run well under half the 300s ceiling.
+ *
+ * maxRequestsPerRun=10 (previously 20): reduced for a DIFFERENT, real
+ * reason the candidate cap alone doesn't cover — if Adzuna itself is
+ * slow/unresponsive, every request in the window times out at 15s
+ * BEFORE any candidate is ever collected (a timed-out combination
+ * yields zero jobs and moves on — see the connector's own
+ * `!result.success` handling below). That fetch-stage-alone worst case
+ * scales directly with maxRequestsPerRun, independent of the candidate
+ * budget entirely: at the original 20, it could alone reach 20x15s=300s
+ * — the full ceiling, from Adzuna slowness alone, collecting nothing.
+ * At 10, that same worst case is capped at 150s, leaving genuine room
+ * for the candidate-processing stage even on a bad day.
+ *
+ * 8 countries x 7 profiles = 56 combinations; a 10-request rotating
+ * window now covers the whole matrix roughly every 6 sync cycles
+ * (~36 hours, up from ~18) at 4 cycles/day — slower full-matrix
+ * coverage is the deliberate, disclosed trade-off for this safety
+ * margin; no combination is ever silently dropped, only deferred (see
+ * combinationsDeferredToFutureRuns). Comfortably inside Adzuna's
+ * documented 250 hits/day limit (10 x 4 = 40/day).
+ *
+ * This is a configuration-only change — do not treat these numbers as
+ * validated by production evidence until a real scheduled sync
+ * actually completes successfully after this change ships.
  */
 export const OIL_AND_GAS_SYNC_BUDGET: OilAndGasSyncBudget = {
-  maxRequestsPerRun: 20,
-  maxNewCandidatesPerRun: 100,
+  maxRequestsPerRun: 10,
+  maxNewCandidatesPerRun: 30,
   maxPagesPerQuery: 1,
   resultsPerPage: 10,
 };

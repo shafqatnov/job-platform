@@ -21,6 +21,7 @@ const {
   selectOilAndGasWindow,
   OIL_AND_GAS_COUNTRY_CODES,
   OIL_AND_GAS_SEARCH_PROFILES,
+  OIL_AND_GAS_SYNC_BUDGET,
 } = await import("@/services/importers/adzunaImporter");
 
 function makeSource(overrides: Partial<JobSourceRow> = {}): JobSourceRow {
@@ -421,5 +422,100 @@ describe("runAdzunaOilAndGasImporter", () => {
     const summary = await runAdzunaOilAndGasImporter({ maxRequestsPerRun: 3, now: () => 0 });
 
     expect(JSON.parse(JSON.stringify(summary))).toEqual(summary);
+  });
+});
+
+/**
+ * Jobnura — Right-Size Adzuna Oil & Gas Sync Batch: production run #17
+ * (commit 827b3f7) hit Vercel's FUNCTION_INVOCATION_TIMEOUT at the
+ * original maxRequestsPerRun=20 / maxNewCandidatesPerRun=100 — both were
+ * lowered. See OIL_AND_GAS_SYNC_BUDGET's own doc comment for the full
+ * reasoning (sequential-only pipeline, 15s-per-call timeouts, no real
+ * production latency telemetry available to calibrate more precisely).
+ */
+describe("OIL_AND_GAS_SYNC_BUDGET (right-sized after production 504 FUNCTION_INVOCATION_TIMEOUT)", () => {
+  beforeEach(() => {
+    listJobSourcesMock.mockReset();
+    runAdzunaConnectorMock.mockReset();
+  });
+
+  it("1. the new candidate budget is 30 (reduced from 100)", () => {
+    expect(OIL_AND_GAS_SYNC_BUDGET.maxNewCandidatesPerRun).toBe(30);
+  });
+
+  it("the new request budget is 10 (reduced from 20), never increased", () => {
+    expect(OIL_AND_GAS_SYNC_BUDGET.maxRequestsPerRun).toBe(10);
+    expect(OIL_AND_GAS_SYNC_BUDGET.maxRequestsPerRun).toBeLessThan(20);
+  });
+
+  it("page-1-only and per-page result size are unchanged by this right-sizing", () => {
+    expect(OIL_AND_GAS_SYNC_BUDGET.maxPagesPerQuery).toBe(1);
+    expect(OIL_AND_GAS_SYNC_BUDGET.resultsPerPage).toBe(10);
+  });
+
+  it("2. calling with NO overrides (the real production call shape) never exceeds the new defaults", async () => {
+    listJobSourcesMock.mockResolvedValue([makeSource()]);
+    runAdzunaConnectorMock.mockResolvedValue({
+      success: true,
+      jobs: Array.from({ length: 10 }, (_, i) => makeRawJob({ externalJobId: `default-${i}` })),
+    });
+
+    const summary = await runAdzunaOilAndGasImporter();
+
+    expect(summary.requestsUsed).toBeLessThanOrEqual(OIL_AND_GAS_SYNC_BUDGET.maxRequestsPerRun);
+    expect(summary.candidatesCollected).toBeLessThanOrEqual(OIL_AND_GAS_SYNC_BUDGET.maxNewCandidatesPerRun);
+    expect(runAdzunaConnectorMock.mock.calls.length).toBeLessThanOrEqual(OIL_AND_GAS_SYNC_BUDGET.maxRequestsPerRun);
+  });
+
+  it("3. the default run still respects the request-budget ceiling exactly (10, not 20)", async () => {
+    listJobSourcesMock.mockResolvedValue([makeSource()]);
+    runAdzunaConnectorMock.mockResolvedValue({ success: true, jobs: [] });
+
+    const summary = await runAdzunaOilAndGasImporter({ now: () => 0 });
+
+    expect(summary.requestsUsed).toBe(10);
+    expect(runAdzunaConnectorMock).toHaveBeenCalledTimes(10);
+  });
+
+  it("4. the default run still respects the candidate-budget ceiling exactly (30, not 100)", async () => {
+    listJobSourcesMock.mockResolvedValue([makeSource()]);
+    runAdzunaConnectorMock.mockResolvedValue({
+      success: true,
+      jobs: Array.from({ length: 10 }, (_, i) => makeRawJob({ externalJobId: `flood-${i}` })),
+    });
+
+    const summary = await runAdzunaOilAndGasImporter({ now: () => 0 });
+
+    expect(summary.candidatesCollected).toBeLessThanOrEqual(30);
+    expect(summary.candidateBudgetReached).toBe(true);
+  });
+
+  it("5. deferred combinations are still correctly reported (56 total minus the smaller 10-wide window)", async () => {
+    listJobSourcesMock.mockResolvedValue([makeSource()]);
+    runAdzunaConnectorMock.mockResolvedValue({ success: true, jobs: [] });
+
+    const summary = await runAdzunaOilAndGasImporter({ now: () => 0 });
+
+    expect(summary.combinationsDeferredToFutureRuns).toBe(56 - 10);
+  });
+
+  it("6. no country/profile scope changed — still 8 countries x 7 profiles = 56 combinations", () => {
+    const combos = buildOilAndGasCombinations();
+    expect(OIL_AND_GAS_COUNTRY_CODES.length).toBe(8);
+    expect(OIL_AND_GAS_SEARCH_PROFILES.length).toBe(7);
+    expect(combos.length).toBe(56);
+  });
+
+  it("7. the smaller window still terminates deterministically — no infinite loop with a tiny budget", async () => {
+    listJobSourcesMock.mockResolvedValue([makeSource()]);
+    runAdzunaConnectorMock.mockResolvedValue({
+      success: true,
+      jobs: Array.from({ length: 10 }, (_, i) => makeRawJob({ externalJobId: `term-${i}` })),
+    });
+
+    const summary = await runAdzunaOilAndGasImporter({ maxRequestsPerRun: 1, maxNewCandidatesPerRun: 1, now: () => 0 });
+
+    expect(runAdzunaConnectorMock).toHaveBeenCalledTimes(1);
+    expect(summary.candidatesCollected).toBe(1);
   });
 });
