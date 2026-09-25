@@ -161,6 +161,19 @@ export type RunAdzunaConnectorOptions = {
    * identically.
    */
   keyword?: string;
+  /**
+   * Selects which of Adzuna's own documented keyword-matching parameters
+   * carries `keyword` above. Defaults to "any", which sends `keyword` as
+   * `what` (free-text match) — unchanged, existing behavior for every
+   * caller that doesn't pass this. "all" sends it as `what_and` instead
+   * ("Filter by keywords. All keywords must be found." per Adzuna's own
+   * documented API — confirmed at https://developer.adzuna.com/docs/search
+   * and https://docs.rs/adzuna/latest/adzuna/request/struct.SearchRequest.html),
+   * requiring every space-separated word in `keyword` to be present
+   * rather than any one of them. Used for compound keywords that need a
+   * co-occurrence requirement, not a plain free-text search.
+   */
+  keywordMatch?: "any" | "all";
 };
 
 function toNullableNumber(value: unknown): number | null {
@@ -258,7 +271,7 @@ async function fetchAdzunaSearchPage(
   url.searchParams.set("app_key", appKey);
   url.searchParams.set("results_per_page", String(resultsPerPage));
   if (options.keyword) {
-    url.searchParams.set("what", options.keyword);
+    url.searchParams.set(options.keywordMatch === "all" ? "what_and" : "what", options.keyword);
   }
 
   const controller = new AbortController();

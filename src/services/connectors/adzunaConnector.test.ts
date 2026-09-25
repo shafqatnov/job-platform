@@ -105,6 +105,41 @@ describe("adzunaConnector", () => {
     expect(url.searchParams.has("what")).toBe(false);
   });
 
+  /**
+   * Fix: Investigate and Fix "upstream" Oil & Gas Keyword False
+   * Positives. Adzuna's own documented `what_and` parameter ("Filter by
+   * keywords. All keywords must be found." —
+   * https://developer.adzuna.com/docs/search) is the officially
+   * supported way to require co-occurring keywords; adzunaImporter.ts
+   * uses this for its "upstream" profile specifically (see
+   * OIL_AND_GAS_KEYWORD_QUERY_OVERRIDES there). This connector-level test
+   * only proves the parameter-selection mechanism itself works — the
+   * importer's own tests prove it's wired to the right profile.
+   */
+  it("sends the 'what_and' param instead of 'what' when keywordMatch is 'all'", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse({ results: [] }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await runAdzunaConnector(ENABLED_API_SOURCE, { countryCode: "gb", keyword: "upstream oil", keywordMatch: "all" });
+
+    const [calledUrl] = fetchMock.mock.calls[0];
+    const url = new URL(calledUrl);
+    expect(url.searchParams.get("what_and")).toBe("upstream oil");
+    expect(url.searchParams.has("what")).toBe(false);
+  });
+
+  it("still sends the plain 'what' param when keywordMatch is omitted, even with a multi-word keyword (no behavior change for existing callers)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse({ results: [] }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await runAdzunaConnector(ENABLED_API_SOURCE, { countryCode: "gb", keyword: "drilling" });
+
+    const [calledUrl] = fetchMock.mock.calls[0];
+    const url = new URL(calledUrl);
+    expect(url.searchParams.get("what")).toBe("drilling");
+    expect(url.searchParams.has("what_and")).toBe(false);
+  });
+
   it("4. credentials are never logged, even on a request failure", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));

@@ -270,6 +270,36 @@ export const OIL_AND_GAS_SYNC_BUDGET: OilAndGasSyncBudget = {
   resultsPerPage: 10,
 };
 
+/**
+ * Fix: Investigate and Fix "upstream" Oil & Gas Keyword False Positives
+ * (2026-09-25). Production run #17's own database evidence showed the
+ * "upstream" profile publishing "Senior Scientist, Process Development
+ * (Upstream)" — a biotech/pharma manufacturing role, not Oil & Gas.
+ * "Upstream" is a real, unrelated bioprocessing term (cell
+ * culture/fermentation, as opposed to "downstream" purification), and
+ * the confirmed false positive's own title contains the word directly,
+ * so a bare `what=upstream` free-text search legitimately matches it —
+ * not a bug in validation, duplicate detection, normalization, or
+ * publishing, all of which are untouched by this fix.
+ *
+ * Adzuna's Search API documents `what_and` as "Filter by keywords. All
+ * keywords must be found." (https://developer.adzuna.com/docs/search;
+ * confirmed independently at
+ * https://docs.rs/adzuna/latest/adzuna/request/struct.SearchRequest.html).
+ * Requiring "upstream" to co-occur with "oil" keeps genuine Oil & Gas
+ * upstream postings (which overwhelmingly also use "oil" — the
+ * industry's own dominant paired term, e.g. "upstream oil and gas") while
+ * excluding the confirmed biotech collision, which has no reason to
+ * mention "oil" anywhere. This is scoped to the "upstream" profile only —
+ * every other profile keeps its existing bare `what` free-text query, and
+ * OIL_AND_GAS_SEARCH_PROFILES/buildOilAndGasCombinations/scheduling are
+ * all unchanged (still 7 profiles, still 56 combinations, still one
+ * Adzuna request per combination).
+ */
+const OIL_AND_GAS_KEYWORD_QUERY_OVERRIDES: Readonly<Record<string, { value: string; matchAll: true }>> = {
+  upstream: { value: "upstream oil", matchAll: true },
+};
+
 export type OilAndGasCombination = { countryCode: AdzunaCountryCode; keyword: string };
 
 /** Deterministic, stable ordering — country-major, profile-minor — never randomized. */
@@ -403,13 +433,15 @@ export async function runAdzunaOilAndGasImporter(
       }
 
       const remaining = budget.maxNewCandidatesPerRun - jobs.length;
+      const queryOverride = OIL_AND_GAS_KEYWORD_QUERY_OVERRIDES[combination.keyword];
       let outcome: OilAndGasQueryOutcome;
       try {
         const result = await runAdzunaConnector(sourceForConnector, {
           countryCode: combination.countryCode,
           page,
           resultsPerPage: Math.min(budget.resultsPerPage, remaining),
-          keyword: combination.keyword,
+          keyword: queryOverride?.value ?? combination.keyword,
+          keywordMatch: queryOverride?.matchAll ? "all" : undefined,
         });
         requestsUsed += 1;
 

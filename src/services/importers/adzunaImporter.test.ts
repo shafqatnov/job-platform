@@ -426,6 +426,81 @@ describe("runAdzunaOilAndGasImporter", () => {
 });
 
 /**
+ * Jobnura — Investigate and Fix "upstream" Oil & Gas Keyword False
+ * Positives (2026-09-25). Production run #17's own database evidence
+ * showed the bare "upstream" profile publishing a biotech/pharma role
+ * ("Senior Scientist, Process Development (Upstream)") — a confirmed
+ * false positive, not a pipeline bug (validation, dedup, normalization,
+ * and publishing are all untouched by this fix). Per Adzuna's own
+ * documented `what_and` parameter ("Filter by keywords. All keywords
+ * must be found." — https://developer.adzuna.com/docs/search, confirmed
+ * independently at
+ * https://docs.rs/adzuna/latest/adzuna/request/struct.SearchRequest.html),
+ * the "upstream" profile now requires "oil" to co-occur. These tests
+ * prove only that the QUERY ITSELF changed correctly and that every
+ * other profile/budget/scheduling behavior is untouched — Adzuna's own
+ * search ranking/matching is external and cannot be asserted here.
+ */
+describe('"upstream" keyword false-positive fix (Oil & Gas targeting)', () => {
+  beforeEach(() => {
+    listJobSourcesMock.mockReset();
+    runAdzunaConnectorMock.mockReset();
+  });
+
+  it("the 'upstream' profile is sent to Adzuna as what_and=\"upstream oil\", not a bare what=upstream", async () => {
+    listJobSourcesMock.mockResolvedValue([makeSource()]);
+    runAdzunaConnectorMock.mockResolvedValue({ success: true, jobs: [] });
+
+    await runAdzunaOilAndGasImporter({
+      countryCodes: ["gb"],
+      profiles: ["upstream"],
+      maxRequestsPerRun: 1,
+      now: () => 0,
+    });
+
+    expect(runAdzunaConnectorMock).toHaveBeenCalledTimes(1);
+    const [, options] = runAdzunaConnectorMock.mock.calls[0];
+    expect(options).toMatchObject({ keyword: "upstream oil", keywordMatch: "all" });
+  });
+
+  it("every other profile still sends its own bare keyword via the default (any/what) match mode, unchanged", async () => {
+    listJobSourcesMock.mockResolvedValue([makeSource()]);
+    runAdzunaConnectorMock.mockResolvedValue({ success: true, jobs: [] });
+
+    await runAdzunaOilAndGasImporter({
+      countryCodes: ["gb"],
+      profiles: ["oil", "gas", "petroleum", "drilling", "offshore", "oilfield"],
+      maxRequestsPerRun: 6,
+      now: () => 0,
+    });
+
+    const calls = runAdzunaConnectorMock.mock.calls.map(([, options]) => options);
+    expect(calls.map((c) => c.keyword).sort()).toEqual(["drilling", "gas", "offshore", "oil", "oilfield", "petroleum"]);
+    expect(calls.every((c) => c.keywordMatch === undefined)).toBe(true);
+  });
+
+  it("the real production profile list is unchanged: still 7 profiles, still the bare word 'upstream', still 56 combinations", () => {
+    expect(OIL_AND_GAS_SEARCH_PROFILES.length).toBe(7);
+    expect(OIL_AND_GAS_SEARCH_PROFILES).toContain("upstream");
+    expect(buildOilAndGasCombinations().length).toBe(56);
+  });
+
+  it("the request budget (10) and candidate budget (30) are unaffected by this fix", () => {
+    expect(OIL_AND_GAS_SYNC_BUDGET.maxRequestsPerRun).toBe(10);
+    expect(OIL_AND_GAS_SYNC_BUDGET.maxNewCandidatesPerRun).toBe(30);
+  });
+
+  it("deferred-combination reporting and rotation are unaffected by this fix (same math as before)", async () => {
+    listJobSourcesMock.mockResolvedValue([makeSource()]);
+    runAdzunaConnectorMock.mockResolvedValue({ success: true, jobs: [] });
+
+    const summary = await runAdzunaOilAndGasImporter({ now: () => 0 });
+
+    expect(summary.combinationsDeferredToFutureRuns).toBe(56 - 10);
+  });
+});
+
+/**
  * Jobnura — Right-Size Adzuna Oil & Gas Sync Batch: production run #17
  * (commit 827b3f7) hit Vercel's FUNCTION_INVOCATION_TIMEOUT at the
  * original maxRequestsPerRun=20 / maxNewCandidatesPerRun=100 — both were
