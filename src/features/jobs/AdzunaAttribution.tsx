@@ -1,16 +1,38 @@
 /**
  * Mandatory attribution for a listing imported from the Adzuna API.
- * Adzuna's API Terms require every displayed advert sourced from their
- * API to carry visible "Jobs by Adzuna" attribution with a link back to
- * Adzuna (see adzunaConnector.ts's own header doc comment for the
- * fuller compliance notes: rate limits, removal-on-termination
- * obligation, no third-party contact). This component is the ONE place
- * that renders it, so the label/link/styling can never drift between
- * JobCard and the job-detail page.
+ * This component is the ONE place that renders it, so the markup can
+ * never drift between JobCard and the job-detail page.
  *
  * Never render this for a non-Adzuna listing — callers gate it on
  * `job.isAdzunaSourced` (see adzunaAttribution.ts / getPublicJobs.ts /
  * getPublicJobBySlug.ts), never shown "just in case."
+ *
+ * COMPLIANCE (per Adzuna's own official Terms of Service, "API user
+ * Obligations" — https://developer.adzuna.com/docs/terms_of_service,
+ * verified directly, not from a third-party summary): an API user
+ * "shall label each displayed advert with the phrase 'Jobs by Adzuna'
+ * at least 116 x 23 pixels in size, wherein the word 'Jobs' shall be
+ * hyperlinked to [the local Adzuna domain] ... and the word 'Adzuna'
+ * shall be the Adzuna Logo Image and shall also be hyperlinked to
+ * [the local Adzuna domain]." This is implemented as closely as this
+ * task could verify safely:
+ *  - "Jobs" is its own hyperlink to the country-specific Adzuna domain
+ *    (unchanged from before — ADZUNA_COUNTRY_DOMAINS below).
+ *  - "Adzuna" is a separate, also-hyperlinked element, sized to meet
+ *    the 116x23px minimum.
+ *
+ * KNOWN, OPEN GAP: the "Adzuna" word is still rendered as styled TEXT,
+ * not the official Adzuna Logo Image. This session could not safely
+ * obtain that image — Adzuna's own press/brand page
+ * (adzuna.co.uk/press.html) returned 403 Forbidden to automated
+ * fetching, and no other verified, correctly-licensed source of the
+ * actual logo asset was available. Rendering an unverified or
+ * third-party-sourced image as "the Adzuna Logo Image" would itself be
+ * inventing attribution, which is explicitly not acceptable — so this
+ * deliberately stays honest text pending a real asset file (obtained
+ * directly from Adzuna) being added to this component. Replace this
+ * <span> with an <Image>/<img> referencing that real asset once
+ * available; do not fabricate one.
  */
 
 // Adzuna's per-country web domain, for a link that's specific to the
@@ -48,13 +70,16 @@ export function AdzunaAttribution({ countryCode, className }: AdzunaAttributionP
   const href = (countryCode && ADZUNA_COUNTRY_DOMAINS[countryCode.toUpperCase()]) || ADZUNA_DEFAULT_DOMAIN;
 
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer nofollow"
-      className={`inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground ${className ?? ""}`}
+    <span
+      className={`inline-flex min-h-5.75 min-w-29 items-center gap-1 text-xs text-muted-foreground ${className ?? ""}`}
     >
-      Jobs by Adzuna
-    </a>
+      <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="font-medium hover:text-foreground">
+        Jobs
+      </a>
+      <span aria-hidden="true">by</span>
+      <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="font-semibold hover:text-foreground">
+        Adzuna
+      </a>
+    </span>
   );
 }

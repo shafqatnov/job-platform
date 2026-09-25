@@ -152,6 +152,15 @@ export type RunAdzunaConnectorOptions = {
   page?: number;
   /** Capped at MAX_RESULTS_PER_PAGE regardless of what's requested. Defaults to DEFAULT_RESULTS_PER_PAGE. */
   resultsPerPage?: number;
+  /**
+   * Adzuna's own documented `what` search-keyword parameter (see
+   * https://developer.adzuna.com/docs/search) — sent only when provided.
+   * Omitting it (the original, still-supported behavior) queries a
+   * country's generic, unfiltered results exactly as before; every
+   * existing caller that doesn't pass this continues to behave
+   * identically.
+   */
+  keyword?: string;
 };
 
 function toNullableNumber(value: unknown): number | null {
@@ -248,6 +257,9 @@ async function fetchAdzunaSearchPage(
   url.searchParams.set("app_id", appId);
   url.searchParams.set("app_key", appKey);
   url.searchParams.set("results_per_page", String(resultsPerPage));
+  if (options.keyword) {
+    url.searchParams.set("what", options.keyword);
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

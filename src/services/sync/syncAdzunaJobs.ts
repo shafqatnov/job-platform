@@ -1,5 +1,5 @@
 import { listJobSources } from "@/services/admin/jobSources";
-import { runAdzunaImporter } from "@/services/importers/adzunaImporter";
+import { runAdzunaOilAndGasImporter } from "@/services/importers/adzunaImporter";
 import type { AdzunaRawJob } from "@/services/connectors/adzunaConnector";
 import { validateImportedJob } from "@/services/validation/validateImportedJob";
 import { detectImportedJobDuplicates } from "@/services/deduplication/detectImportedJobDuplicates";
@@ -18,7 +18,14 @@ import { ingestImportedJob } from "@/services/publishing/publishImportedJob";
  *   Adzuna Connector -> Importer -> Validation -> Duplicate Detection ->
  *   AI Normalization -> Confidence Decision -> Publishing/Admin Review
  *
- * HARD GATE (re-checked here, independent of runAdzunaImporter's own
+ * As of "Jobnura — Adzuna Oil & Gas Expansion v1.0," fetches via
+ * runAdzunaOilAndGasImporter() — a controlled, budget-capped rotation
+ * across 8 Adzuna-supported countries and a small Oil & Gas keyword
+ * profile set (see adzunaImporter.ts's own doc comment for the full
+ * design) — rather than the original 2-country/page-1 controlled test
+ * scope. Everything from validation onward below is unchanged.
+ *
+ * HARD GATE (re-checked here, independent of the importer's own
  * `enabled` check, exactly like every other layer in this pipeline
  * re-verifies its own preconditions rather than trusting a caller):
  * this function calls the real Adzuna API ONLY when the registry's
@@ -207,6 +214,7 @@ function stripAdzunaSourceTruncationNotes(normalization: NormalizeImportedJobRes
 }
 
 export async function syncAdzunaJobs(): Promise<SyncAdzunaJobsResult> {
+  const runStartedAt = Date.now();
   const sources = await listJobSources();
   const adzunaSource = sources.find((source) => source.name === "Adzuna");
 
@@ -220,13 +228,29 @@ export async function syncAdzunaJobs(): Promise<SyncAdzunaJobsResult> {
     return { ok: false, reason: "disabled" };
   }
 
-  const importResult = await runAdzunaImporter();
-  // runAdzunaImporter independently re-derives eligibility from the
-  // same registry (enabled + Adzuna hostname) — if that disagrees with
-  // the check above (a genuine race between two overlapping calls),
+  const importResult = await runAdzunaOilAndGasImporter();
+  // runAdzunaOilAndGasImporter independently re-derives eligibility from
+  // the same registry (enabled + Adzuna hostname) — if that disagrees
+  // with the check above (a genuine race between two overlapping calls),
   // stop safely rather than processing a partial/stale result.
   if (!importResult.totalSourcesEligible) {
     return { ok: false, reason: "disabled" };
+  }
+
+  // Per-combination observability: country, keyword profile, page, and
+  // outcome only — never a raw error message body (already reduced to a
+  // safe, generic string by the connector itself) and never a credential.
+  for (const outcome of importResult.results) {
+    console.log(
+      JSON.stringify({
+        event: "adzuna_sync_combination_result",
+        countryCode: outcome.countryCode,
+        keyword: outcome.keyword,
+        page: outcome.page,
+        success: outcome.success,
+        resultCount: outcome.resultCount,
+      })
+    );
   }
 
   const rawJobs = importResult.jobs;
@@ -288,6 +312,37 @@ export async function syncAdzunaJobs(): Promise<SyncAdzunaJobsResult> {
     else if (result.outcome === "rejected") rejectedCount += 1;
     else failedCount += 1;
   }
+
+  // Run-level summary — safe to log in full: no credentials, no job
+  // title/description content, only identifiers and counts. Note
+  // queuedForReviewCount above covers BOTH genuine admin_review items
+  // AND auto_publish items still blocked on an unresolved location
+  // (ingestImportedJob's own "queued_for_review" outcome doesn't
+  // distinguish the two) — splitting that further would require
+  // changing publishImportedJob.ts's own result contract, which this
+  // task deliberately does not touch.
+  console.log(
+    JSON.stringify({
+      event: "adzuna_sync_run_summary",
+      requestsUsed: importResult.requestsUsed,
+      requestBudget: importResult.requestBudget,
+      requestBudgetReached: importResult.requestBudgetReached,
+      candidatesCollected: importResult.candidatesCollected,
+      candidateBudget: importResult.candidateBudget,
+      candidateBudgetReached: importResult.candidateBudgetReached,
+      combinationsDeferredToFutureRuns: importResult.combinationsDeferredToFutureRuns,
+      fetchedCount: rawJobs.length,
+      validCount: validJobs.length,
+      invalidCount: rawJobs.length - validJobs.length,
+      exactDuplicateCount,
+      possibleDuplicateCount,
+      publishedCount,
+      queuedForReviewCount,
+      rejectedCount,
+      failedCount,
+      runDurationMs: Date.now() - runStartedAt,
+    })
+  );
 
   return {
     ok: true,

@@ -83,6 +83,28 @@ describe("adzunaConnector", () => {
     expect(url.searchParams.get("app_key")).toBe("test-app-key-not-real");
   });
 
+  it("sends the 'what' keyword param when a keyword is provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse({ results: [] }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await runAdzunaConnector(ENABLED_API_SOURCE, { countryCode: "gb", keyword: "drilling" });
+
+    const [calledUrl] = fetchMock.mock.calls[0];
+    const url = new URL(calledUrl);
+    expect(url.searchParams.get("what")).toBe("drilling");
+  });
+
+  it("never sends a 'what' param when no keyword is provided (existing generic-query behavior is unchanged)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse({ results: [] }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await runAdzunaConnector(ENABLED_API_SOURCE, { countryCode: "gb" });
+
+    const [calledUrl] = fetchMock.mock.calls[0];
+    const url = new URL(calledUrl);
+    expect(url.searchParams.has("what")).toBe(false);
+  });
+
   it("4. credentials are never logged, even on a request failure", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));

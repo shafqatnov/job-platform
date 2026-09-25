@@ -12,7 +12,7 @@ vi.mock("@/services/admin/jobSources", () => ({
 
 const runAdzunaImporterMock = vi.fn();
 vi.mock("@/services/importers/adzunaImporter", () => ({
-  runAdzunaImporter: () => runAdzunaImporterMock(),
+  runAdzunaOilAndGasImporter: () => runAdzunaImporterMock(),
 }));
 
 const detectImportedJobDuplicatesMock = vi.fn();
