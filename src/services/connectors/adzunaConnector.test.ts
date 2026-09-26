@@ -106,6 +106,39 @@ describe("adzunaConnector", () => {
   });
 
   /**
+   * Jobnura — Add Exact Adzuna Candidate Provenance. Observability only:
+   * each parsed raw job now carries the exact keyword it was fetched
+   * under, so a future investigation never has to reconstruct it after
+   * the fact (see the earlier COTA/"Upstream Rehabilitation" investigation).
+   */
+  it("stamps each parsed job with the exact keyword the request was made with (provenance)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockJsonResponse({ results: [{ id: 1, title: "Drilling Engineer", location: { display_name: "Calgary" } }] })
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await runAdzunaConnector(ENABLED_API_SOURCE, { countryCode: "ca", keyword: "drilling" });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.jobs[0].adzunaCountryCode).toBe("ca");
+      expect(result.jobs[0].adzunaKeyword).toBe("drilling");
+    }
+  });
+
+  it("stamps each parsed job with a null keyword when no keyword was used (historical/generic-query compatibility)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse({ results: [{ id: 1, title: "Some Job" }] }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await runAdzunaConnector(ENABLED_API_SOURCE, { countryCode: "gb" });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.jobs[0].adzunaKeyword).toBeNull();
+    }
+  });
+
+  /**
    * Fix: Investigate and Fix "upstream" Oil & Gas Keyword False
    * Positives. Adzuna's own documented `what_and` parameter ("Filter by
    * keywords. All keywords must be found." —

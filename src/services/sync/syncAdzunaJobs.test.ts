@@ -86,6 +86,7 @@ function makeRawJob(overrides: Partial<AdzunaRawJob> = {}): AdzunaRawJob {
     offices: [],
     adzunaCountryCode: "gb",
     adzunaCategory: null,
+    adzunaKeyword: null,
     salaryMin: null,
     salaryMax: null,
     salaryCurrency: null,
@@ -190,6 +191,41 @@ describe("syncAdzunaJobs", () => {
       expect(result.fetchedCount).toBe(1);
       expect(result.publishedCount).toBe(1);
     }
+  });
+
+  /**
+   * Jobnura — Add Exact Adzuna Candidate Provenance. Proves this
+   * orchestrator passes the raw job's OWN adzunaCountryCode/adzunaKeyword
+   * through to ingestImportedJob's `provenance` input, unchanged and
+   * un-guessed — the only place in the pipeline with direct, typed access
+   * to both values from the actual combination that fetched this job.
+   */
+  it("passes the raw job's own country code and keyword through as provenance", async () => {
+    listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+    const rawJob = makeRawJob({ adzunaCountryCode: "ca", adzunaKeyword: "upstream" });
+    runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+    detectImportedJobDuplicatesMock.mockResolvedValue([{ outcome: "unique", reason: null, matchedWith: null, job: rawJob }]);
+    normalizeImportedJobMock.mockResolvedValue(makeGoodNormalization());
+    ingestImportedJobMock.mockResolvedValue({ outcome: "published", jobId: "job-1", reviewId: "review-1" });
+
+    await syncAdzunaJobs();
+
+    const [callArg] = ingestImportedJobMock.mock.calls[0];
+    expect(callArg.provenance).toEqual({ countryCode: "ca", keyword: "upstream" });
+  });
+
+  it("passes a null keyword through as provenance when the raw job had none (generic-query candidates)", async () => {
+    listJobSourcesMock.mockResolvedValue([makeSource({ enabled: true, authorizationStatus: "verified" })]);
+    const rawJob = makeRawJob({ adzunaCountryCode: "gb", adzunaKeyword: null });
+    runAdzunaImporterMock.mockResolvedValue(importResultWith([rawJob]));
+    detectImportedJobDuplicatesMock.mockResolvedValue([{ outcome: "unique", reason: null, matchedWith: null, job: rawJob }]);
+    normalizeImportedJobMock.mockResolvedValue(makeGoodNormalization());
+    ingestImportedJobMock.mockResolvedValue({ outcome: "published", jobId: "job-1", reviewId: "review-1" });
+
+    await syncAdzunaJobs();
+
+    const [callArg] = ingestImportedJobMock.mock.calls[0];
+    expect(callArg.provenance).toEqual({ countryCode: "gb", keyword: null });
   });
 
   it("a race where the importer itself finds the source ineligible also stops safely without publishing", async () => {

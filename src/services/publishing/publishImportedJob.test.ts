@@ -504,3 +504,223 @@ describe("publishImportedJob (real dev database, temporary fixtures)", () => {
     if (jobA) createdCompanyIds.add(jobA.companyId);
   });
 });
+
+/**
+ * Jobnura — Add Exact Adzuna Candidate Provenance (2026-09-26).
+ * Observability/data-lineage only: proves the optional `provenance`
+ * input is captured onto the review's read-only snapshot exactly like
+ * every other field, never influences a publish outcome, and behaves
+ * correctly both when present (Adzuna) and absent (every other source,
+ * including all historical rows).
+ */
+describe("ImportedJobReview provenance (real dev database, temporary fixtures)", () => {
+  let fixtures: ModerationTestFixtures;
+  let countryName: string;
+  let cityName: string;
+  let categoryName: string;
+
+  const createdCompanyIds = new Set<string>();
+  const createdReviewIds = new Set<string>();
+  const createdJobIds = new Set<string>();
+
+  beforeAll(async () => {
+    fixtures = await createModerationTestFixtures();
+    const [country, city, category] = await Promise.all([
+      prisma.country.findUniqueOrThrow({ where: { id: fixtures.countryId }, select: { name: true } }),
+      prisma.city.findUniqueOrThrow({ where: { id: fixtures.cityId }, select: { name: true } }),
+      prisma.category.findUniqueOrThrow({ where: { id: fixtures.categoryId }, select: { name: true } }),
+    ]);
+    countryName = country.name;
+    cityName = city.name;
+    categoryName = category.name;
+  });
+
+  afterAll(async () => {
+    await prisma.moderationAction.deleteMany({ where: { targetJobId: { in: Array.from(createdJobIds) } } });
+    await prisma.job.deleteMany({ where: { id: { in: Array.from(createdJobIds) } } });
+    await prisma.importedJobReview.deleteMany({ where: { id: { in: Array.from(createdReviewIds) } } });
+    await prisma.company.deleteMany({ where: { id: { in: Array.from(createdCompanyIds) } } });
+    await cleanupModerationTestFixtures(fixtures);
+  });
+
+  function makeRawJob(overrides: Partial<ValidatableRawJob> = {}): ValidatableRawJob {
+    return {
+      sourceId: `provenance-test-source-${crypto.randomUUID()}`,
+      externalJobId: crypto.randomUUID(),
+      title: `${TEST_PREFIX} Drilling Engineer`,
+      location: cityName,
+      description: "A genuine, real description of the role and its responsibilities.",
+      sourceUrl: "https://www.adzuna.ca/details/1",
+      updatedAt: "2026-01-01T00:00:00Z",
+      rawSourceType: "API",
+      companyIdentity: `${TEST_PREFIX} Acme Drilling Co ${crypto.randomUUID().slice(0, 8)}`,
+      departments: [],
+      offices: [],
+      ...overrides,
+    };
+  }
+
+  function makeGoodNormalization(rawJob: ValidatableRawJob): NormalizeImportedJobResult {
+    return {
+      ok: true,
+      result: {
+        sourceId: rawJob.sourceId,
+        externalJobId: rawJob.externalJobId,
+        sourceUrl: rawJob.sourceUrl,
+        normalizedTitle: rawJob.title,
+        normalizedDescription: rawJob.description ?? "",
+        country: countryName,
+        city: cityName,
+        category: categoryName,
+        skills: [],
+        experienceSummary: null,
+        salary: null,
+        employmentType: null,
+        workArrangement: null,
+        visaSponsorship: null,
+        quality: { contentQuality: "good", concerns: [], missingImportantFields: [], suspiciousSignals: [] },
+      },
+    };
+  }
+
+  function makeDecision(decision: ImportedJobDecision["decision"], reasons: string[] = []): ImportedJobDecision {
+    return { decision, reasons };
+  }
+
+  async function trackResult(result: Awaited<ReturnType<typeof ingestImportedJob>>) {
+    if ("reviewId" in result) createdReviewIds.add(result.reviewId);
+    if (result.outcome === "published") createdJobIds.add(result.jobId);
+    return result;
+  }
+
+  it("1. country provenance is stored on the review", async () => {
+    const rawJob = makeRawJob();
+    const result = await trackResult(
+      await ingestImportedJob({
+        rawJob,
+        normalization: makeGoodNormalization(rawJob),
+        decision: makeDecision("admin_review"),
+        provenance: { countryCode: "ca", keyword: "upstream" },
+      })
+    );
+
+    const review = await prisma.importedJobReview.findUnique({ where: { id: (result as { reviewId: string }).reviewId } });
+    expect(review?.sourceCountryCode).toBe("ca");
+  });
+
+  it("2. keyword/profile provenance is stored on the review", async () => {
+    const rawJob = makeRawJob();
+    const result = await trackResult(
+      await ingestImportedJob({
+        rawJob,
+        normalization: makeGoodNormalization(rawJob),
+        decision: makeDecision("admin_review"),
+        provenance: { countryCode: "ca", keyword: "upstream" },
+      })
+    );
+
+    const review = await prisma.importedJobReview.findUnique({ where: { id: (result as { reviewId: string }).reviewId } });
+    expect(review?.sourceKeyword).toBe("upstream");
+  });
+
+  it("3. provenance survives the full import flow through to publication", async () => {
+    const rawJob = makeRawJob();
+    const result = await trackResult(
+      await ingestImportedJob({
+        rawJob,
+        normalization: makeGoodNormalization(rawJob),
+        decision: makeDecision("auto_publish"),
+        provenance: { countryCode: "au", keyword: "offshore" },
+      })
+    );
+
+    expect(result.outcome).toBe("published");
+    const review = await prisma.importedJobReview.findUnique({ where: { id: (result as { reviewId: string }).reviewId } });
+    expect(review).toMatchObject({ sourceCountryCode: "au", sourceKeyword: "offshore", status: "published" });
+    const job = await findJobByIdentity(rawJob);
+    if (job) createdCompanyIds.add(job.companyId);
+  });
+
+  it("4. historical/other-source records without provenance remain valid (null, never invented)", async () => {
+    const rawJob = makeRawJob();
+    // No `provenance` field at all -- exactly how every existing
+    // Greenhouse call site (and every pre-existing review row) looks.
+    const result = await trackResult(
+      await ingestImportedJob({ rawJob, normalization: makeGoodNormalization(rawJob), decision: makeDecision("admin_review") })
+    );
+
+    const review = await prisma.importedJobReview.findUnique({ where: { id: (result as { reviewId: string }).reviewId } });
+    expect(review?.sourceCountryCode).toBeNull();
+    expect(review?.sourceKeyword).toBeNull();
+  });
+
+  it("5+6. a duplicate combination for the same external job does not overwrite the first-recorded provenance, and still produces only one Job", async () => {
+    const rawJob = makeRawJob();
+    const first = await trackResult(
+      await ingestImportedJob({
+        rawJob,
+        normalization: makeGoodNormalization(rawJob),
+        decision: makeDecision("auto_publish"),
+        provenance: { countryCode: "ca", keyword: "drilling" },
+      })
+    );
+    // Simulates the SAME external job resurfacing under a second profile
+    // in the same run (e.g. ca+offshore) -- ingestImportedJob's own
+    // existing idempotency finds the already-existing review rather than
+    // creating a second one.
+    const second = await trackResult(
+      await ingestImportedJob({
+        rawJob,
+        normalization: makeGoodNormalization(rawJob),
+        decision: makeDecision("auto_publish"),
+        provenance: { countryCode: "ca", keyword: "offshore" },
+      })
+    );
+
+    expect(first.outcome).toBe("published");
+    expect(second.outcome).toBe("published");
+    if (first.outcome === "published") expect(second.outcome === "published" && second.jobId).toBe(first.jobId);
+
+    const review = await prisma.importedJobReview.findUnique({ where: { id: (first as { reviewId: string }).reviewId } });
+    expect(review?.sourceKeyword).toBe("drilling"); // the FIRST combination's provenance wins, never silently overwritten
+
+    const jobs = await prisma.job.findMany({ where: { importedSourceId: rawJob.sourceId, importedExternalJobId: rawJob.externalJobId } });
+    expect(jobs).toHaveLength(1);
+    createdCompanyIds.add(jobs[0].companyId);
+  });
+
+  it("7. provenance never alters the publish decision (identical outcome with and without it)", async () => {
+    const rawJobWith = makeRawJob();
+    const rawJobWithout = makeRawJob();
+
+    const withProvenance = await trackResult(
+      await ingestImportedJob({
+        rawJob: rawJobWith,
+        normalization: makeGoodNormalization(rawJobWith),
+        decision: makeDecision("auto_publish"),
+        provenance: { countryCode: "gb", keyword: "petroleum" },
+      })
+    );
+    const withoutProvenance = await trackResult(
+      await ingestImportedJob({ rawJob: rawJobWithout, normalization: makeGoodNormalization(rawJobWithout), decision: makeDecision("auto_publish") })
+    );
+
+    expect(withProvenance.outcome).toBe(withoutProvenance.outcome);
+    expect(withProvenance.outcome).toBe("published");
+    const jobWith = await findJobByIdentity(rawJobWith);
+    const jobWithout = await findJobByIdentity(rawJobWithout);
+    if (jobWith) createdCompanyIds.add(jobWith.companyId);
+    if (jobWithout) createdCompanyIds.add(jobWithout.companyId);
+  });
+
+  async function findJobByIdentity(rawJob: ValidatableRawJob) {
+    return prisma.job.findUnique({
+      where: {
+        importedSourceId_importedExternalJobId: {
+          importedSourceId: rawJob.sourceId,
+          importedExternalJobId: rawJob.externalJobId,
+        },
+      },
+    });
+  }
+});

@@ -304,7 +304,12 @@ export async function syncAdzunaJobs(): Promise<SyncAdzunaJobsResult> {
       sourceEligible: true,
     });
 
-    const result = await ingestImportedJob({ rawJob, normalization, decision });
+    const result = await ingestImportedJob({
+      rawJob,
+      normalization,
+      decision,
+      provenance: { countryCode: rawJob.adzunaCountryCode, keyword: rawJob.adzunaKeyword },
+    });
     logSyncResult(rawJob.sourceId, rawJob.externalJobId, result.outcome);
 
     if (result.outcome === "published") publishedCount += 1;

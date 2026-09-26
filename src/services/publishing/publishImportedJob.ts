@@ -54,10 +54,26 @@ export type PublishImportedJobResult =
   | { outcome: "rejected"; reviewId: string }
   | { outcome: "failed"; error: string };
 
+/**
+ * Observability/data-lineage only — the exact source query combination
+ * that produced this candidate (currently supplied by syncAdzunaJobs.ts
+ * only, from AdzunaRawJob's own adzunaCountryCode/adzunaKeyword). Never
+ * read by any matching, dedup, normalization, or publishing decision
+ * below — captured once, at review-creation time, purely so a future
+ * investigation can answer "which country + keyword produced this?"
+ * without reconstructing it after the fact.
+ */
+export type ImportedJobProvenance = {
+  countryCode: string | null;
+  keyword: string | null;
+};
+
 export type PublishImportedJobInput = {
   rawJob: ValidatableRawJob;
   normalization: NormalizeImportedJobResult;
   decision: ImportedJobDecision;
+  /** Omitted (or omitted fields within it) for sources that don't have this concept (e.g. Greenhouse) — the review row simply stores null, never invented. */
+  provenance?: ImportedJobProvenance | null;
 };
 
 /**
@@ -237,7 +253,7 @@ async function refreshLocationReviewStatus(
  * (non-racing) operation.
  */
 async function findOrCreateReview(input: PublishImportedJobInput): Promise<{ review: NonNullable<ImportedJobReviewRow>; alreadyExisted: boolean }> {
-  const { rawJob, normalization, decision } = input;
+  const { rawJob, normalization, decision, provenance } = input;
 
   const existing = await prisma.importedJobReview.findFirst({
     where: { importedSourceId: rawJob.sourceId, importedExternalJobId: rawJob.externalJobId },
@@ -260,6 +276,8 @@ async function findOrCreateReview(input: PublishImportedJobInput): Promise<{ rev
       category: aiResult?.category ?? null,
       country: aiResult?.country ?? null,
       city: aiResult?.city ?? null,
+      sourceCountryCode: provenance?.countryCode ?? null,
+      sourceKeyword: provenance?.keyword ?? null,
       decision: decision.decision,
       reasons: decision.reasons,
       status: reviewStatusForDecision(decision.decision),

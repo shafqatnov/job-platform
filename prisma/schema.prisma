@@ -546,6 +546,17 @@ model ImportedJobReview {
   country         String?
   city            String?
 
+  // Observability/data-lineage only — the exact source query combination
+  // that produced this candidate (currently populated for Adzuna only;
+  // see PublishImportedJobInput.provenance in publishImportedJob.ts).
+  // Captured once at import time, same as the other snapshot fields
+  // above, and never used by validation, deduplication, normalization,
+  // or publishing decisions. Null for every row created before this
+  // field existed, and for any source (e.g. Greenhouse) that doesn't
+  // supply a provenance value — never backfilled or invented.
+  sourceCountryCode String?
+  sourceKeyword     String?
+
   // The confidence-decision stage's original verdict + machine-readable
   // reason codes — see decideImportedJobConfidence.ts. `decision` is
   // free text matching ModerationAction.action's existing convention.

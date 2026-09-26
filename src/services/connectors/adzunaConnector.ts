@@ -116,6 +116,8 @@ export type AdzunaRawJob = {
   adzunaCountryCode: AdzunaCountryCode;
   /** Adzuna's own category label (e.g. "IT Jobs") — a different vocabulary from Jobnura's own Category table; kept for audit/reference only, not force-mapped onto Jobnura's canonical categories. */
   adzunaCategory: string | null;
+  /** The exact `what`/`what_and` keyword this listing was fetched under (see RunAdzunaConnectorOptions.keyword) — null when no keyword was used (the original, still-supported generic-query behavior). Provenance/observability only — never read by matching, dedup, or publishing logic. */
+  adzunaKeyword: string | null;
   salaryMin: number | null;
   salaryMax: number | null;
   /**
@@ -191,7 +193,7 @@ function toNullableString(value: unknown): string | null {
  * — same contract as greenhouseConnector.ts's parseGreenhouseJob.
  * Never invents a value that wasn't in the source payload.
  */
-function parseAdzunaJob(raw: unknown, sourceId: string, countryCode: AdzunaCountryCode): AdzunaRawJob | null {
+function parseAdzunaJob(raw: unknown, sourceId: string, countryCode: AdzunaCountryCode, keyword: string | null): AdzunaRawJob | null {
   if (!raw || typeof raw !== "object") {
     return null;
   }
@@ -236,6 +238,7 @@ function parseAdzunaJob(raw: unknown, sourceId: string, countryCode: AdzunaCount
     offices: [],
     adzunaCountryCode: countryCode,
     adzunaCategory: categoryLabel,
+    adzunaKeyword: keyword,
     salaryMin: toNullableNumber(job.salary_min),
     salaryMax: toNullableNumber(job.salary_max),
     salaryCurrency: null,
@@ -314,7 +317,7 @@ async function fetchAdzunaSearchPage(
   const rawJobs = (payload as { results: unknown[] }).results;
   const jobs: AdzunaRawJob[] = [];
   for (const raw of rawJobs) {
-    const parsed = parseAdzunaJob(raw, sourceId, options.countryCode);
+    const parsed = parseAdzunaJob(raw, sourceId, options.countryCode, options.keyword ?? null);
     if (parsed) {
       jobs.push(parsed);
     }

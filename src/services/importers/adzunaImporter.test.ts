@@ -61,6 +61,7 @@ function makeRawJob(overrides: Partial<AdzunaRawJob> = {}): AdzunaRawJob {
     offices: [],
     adzunaCountryCode: "gb",
     adzunaCategory: null,
+    adzunaKeyword: null,
     salaryMin: null,
     salaryMax: null,
     salaryCurrency: null,
