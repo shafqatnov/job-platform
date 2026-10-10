@@ -23,6 +23,7 @@ describe("publicJobVisibilityWhere", () => {
     // a query test (see getPublicJobs.test.ts for the real DB behavior).
     expect(SOURCE).toContain('"[IMPORT TEST]"');
     expect(SOURCE).toContain('"[LOCATION REVIEW TEST]"');
+    expect(SOURCE).toContain('"[ADZUNA CROSS-PROFILE TEST]"');
     expect(SOURCE).not.toMatch(/title:\s*{\s*contains:\s*["']test["']/i);
   });
 
@@ -47,6 +48,25 @@ describe("publicJobVisibilityWhere", () => {
     const fixtures = await createModerationTestFixtures();
     try {
       const job = await createTestJob(fixtures, { title: "[GH LOCATION WIRING TEST] Backend Engineer", status: "active" });
+      const visibleIds = (
+        await prisma.job.findMany({ where: publicJobVisibilityWhere(), select: { id: true } })
+      ).map((j) => j.id);
+      expect(visibleIds).not.toContain(job.id);
+    } finally {
+      await cleanupModerationTestFixtures(fixtures);
+    }
+  });
+
+  /**
+   * Regression test for the Google Indexing Audit's (2026-10-10) proven
+   * finding: a leaked src/services/sync/adzunaCrossProfileDeduplication.test.ts
+   * fixture was live, indexable, and present in sitemap.xml because this
+   * marker was missing from the list above.
+   */
+  it("an [ADZUNA CROSS-PROFILE TEST] job (like the other title markers) is excluded even while active", async () => {
+    const fixtures = await createModerationTestFixtures();
+    try {
+      const job = await createTestJob(fixtures, { title: "[ADZUNA CROSS-PROFILE TEST] Offshore Technician", status: "active" });
       const visibleIds = (
         await prisma.job.findMany({ where: publicJobVisibilityWhere(), select: { id: true } })
       ).map((j) => j.id);

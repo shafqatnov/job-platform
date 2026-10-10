@@ -28,6 +28,14 @@ import type { Prisma } from "@/generated/prisma/client";
  *    stopped a future orphaned row of this same family from reaching
  *    `active` and leaking exactly like the two markers above did.
  *
+ *  - "[ADZUNA CROSS-PROFILE TEST]" — src/services/sync/
+ *    adzunaCrossProfileDeduplication.test.ts's fixture prefix. The
+ *    Google Indexing Audit (2026-10-10) found one real `status: active`
+ *    Job row using it, publicly live, indexable, and present in
+ *    sitemap.xml — that test only asserts the row's existence via a
+ *    direct Prisma query, never via getPublicJobs/getPublicJobBySlug,
+ *    so excluding it here breaks no existing test.
+ *
  * Deliberately NOT included: "[AI MODERATION TEST]"
  * (src/test-utils/moderationFixtures.ts's TEST_LABEL_PREFIX). Dozens of
  * existing tests — most directly, getPublicJobs.test.ts itself — create
@@ -35,7 +43,12 @@ import type { Prisma } from "@/generated/prisma/client";
  * public results; excluding it here would break those already-passing
  * tests. This family is instead covered structurally, below.
  */
-const TEST_FIXTURE_TITLE_MARKERS = ["[IMPORT TEST]", "[LOCATION REVIEW TEST]", "[GH LOCATION WIRING TEST]"] as const;
+const TEST_FIXTURE_TITLE_MARKERS = [
+  "[IMPORT TEST]",
+  "[LOCATION REVIEW TEST]",
+  "[GH LOCATION WIRING TEST]",
+  "[ADZUNA CROSS-PROFILE TEST]",
+] as const;
 
 /**
  * Every disposable test fixture across this codebase's test suite
