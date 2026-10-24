@@ -6,6 +6,26 @@ import { OIL_AND_GAS_CATEGORY_SLUGS } from "@/services/jobs/getOilAndGasHub";
 import { getSiteOrigin } from "@/lib/siteUrl";
 
 /**
+ * Without this, sitemap.ts has no Request-time API call (getSiteOrigin()
+ * returns early via NEXT_PUBLIC_SITE_URL in production, never reaching
+ * headers()) and no other dynamic signal, so Next.js caches this route
+ * indefinitely — confirmed in production: the live sitemap.xml carried
+ * an unchanged ETag and x-vercel-cache: HIT for 14 days across a
+ * deployment-free window, silently omitting 53 real jobs published in
+ * that time. This is Next 16's documented "previous model" route
+ * segment config (this project does not set the `cacheComponents` flag),
+ * confirmed compatible with the installed Next 16.3.5: periodic,
+ * time-based revalidation, not a full per-request dynamic re-render —
+ * one background regeneration at most per window, not one database
+ * query per visitor. 3600s (1 hour) keeps the sitemap meaningfully
+ * fresh relative to the existing ~6-hour Adzuna sync cadence without
+ * adding meaningful load for this traffic volume. Must stay a literal,
+ * statically-analyzable number (Next's own requirement) — never an
+ * expression.
+ */
+export const revalidate = 3600;
+
+/**
  * Next.js's native sitemap metadata route (app/sitemap.ts) — no new
  * package required, fully supported by the installed Next 16.3.5.
  *
