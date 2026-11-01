@@ -1,0 +1,52 @@
+name: Expire Jobs
+
+# Free GitHub Actions scheduler for the existing, already-protected
+# /api/cron/expire-jobs endpoint, mirroring sync-adzuna.yml's pattern.
+# This route has never had any scheduler pointed at it since it was
+# built — it was deliberately written scheduler-agnostic, but the
+# follow-up step of wiring up a scheduler was never done (confirmed via
+# a read-only audit: no vercel.json cron entry ever existed for this
+# route, and no other workflow calls it).
+#
+# This workflow contains no job-expiry logic itself and never touches
+# the database — the server's own existing gate (JOB_EXPIRY_CRON_SECRET,
+# checked via constant-time comparison in secureTrigger.ts) and the
+# route's own expireDueJobs() decide everything else, exactly as
+# sync-adzuna.yml already does for its own endpoint.
+on:
+  schedule:
+    # Once daily at midnight UTC. Never run on push.
+    - cron: "0 0 * * *"
+  workflow_dispatch: {}
+
+# Prevents two expiry runs from ever overlapping: if a new run
+# (scheduled or manual) starts while a previous one is still in
+# progress, the previous one is cancelled rather than letting both run
+# concurrently against the same server endpoint.
+concurrency:
+  group: expire-jobs
+  cancel-in-progress: true
+
+jobs:
+  expire:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the protected job-expiry endpoint
+        env:
+          JOB_EXPIRY_CRON_SECRET: ${{ secrets.JOB_EXPIRY_CRON_SECRET }}
+        run: |
+          set -u
+          http_status=$(curl -sS -o /tmp/response.json -w "%{http_code}" \
+            --max-time 600 \
+            -X POST \
+            -H "Authorization: Bearer ${JOB_EXPIRY_CRON_SECRET}" \
+            https://www.jobnura.com/api/cron/expire-jobs)
+
+          echo "HTTP status: ${http_status}"
+          echo "Response body:"
+          cat /tmp/response.json
+
+          if [ "${http_status}" -lt 200 ] || [ "${http_status}" -ge 300 ]; then
+            echo "Job-expiry request did not succeed (HTTP ${http_status})."
+            exit 1
+          fi
