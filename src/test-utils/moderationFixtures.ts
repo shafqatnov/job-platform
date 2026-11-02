@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import type { ApplicationMethod, JobStatus } from "@/generated/prisma/enums";
 
 /**
@@ -10,9 +11,9 @@ import type { ApplicationMethod, JobStatus } from "@/generated/prisma/enums";
  * uses its own freshly-generated `@example.invalid` user and a
  * "[AI MODERATION TEST]"-prefixed company/job title, and every test
  * file deletes everything it created in an `afterAll`/`afterEach` hook.
- * Reference data (country/city/category) is READ, never created —
- * these tests reuse whatever real reference rows already exist rather
- * than inventing fake ones.
+ * Country/City are READ, never created — these tests reuse whatever
+ * real reference rows already exist. Category is the one exception:
+ * it's created fresh per fixture set (see below) rather than reused.
  */
 
 export const TEST_LABEL_PREFIX = "[AI MODERATION TEST]";
@@ -28,15 +29,31 @@ export type ModerationTestFixtures = {
 export async function createModerationTestFixtures(): Promise<ModerationTestFixtures> {
   const country = await prisma.country.findFirst({ select: { id: true } });
   const city = country ? await prisma.city.findFirst({ where: { countryId: country.id }, select: { id: true } }) : null;
-  const category = await prisma.category.findFirst({ select: { id: true } });
 
-  if (!country || !city || !category) {
+  if (!country || !city) {
     throw new Error(
-      "Reference data (Country/City/Category) is missing in this database — the moderation test suite reuses real reference data and does not create its own."
+      "Reference data (Country/City) is missing in this database — the moderation test suite reuses real reference data and does not create its own."
     );
   }
 
   const uniqueSuffix = crypto.randomUUID();
+
+  // A dedicated, disposable test Category — never a real production
+  // category looked up via findFirst(). That used to pick "whichever
+  // category Postgres returns first" with no deterministic ordering, so
+  // its answer could silently change (and did: adding the Oil & Gas
+  // child categories shifted it onto "Technology," a real category with
+  // real jobs already on it) and corrupt any test asserting this
+  // fixture's category starts with zero jobs. A fresh, uniquely-slugged
+  // category every call can never collide with real data or with
+  // another concurrently-running test's own fixture category.
+  const category = await prisma.category.create({
+    data: {
+      name: `${TEST_LABEL_PREFIX} Category ${uniqueSuffix.slice(0, 8)}`,
+      slug: `ai-mod-test-cat-${uniqueSuffix}`,
+    },
+    select: { id: true },
+  });
 
   const user = await prisma.user.create({
     data: {
@@ -105,8 +122,43 @@ export async function createTestJob(
 }
 
 export async function cleanupModerationTestFixtures(fixtures: ModerationTestFixtures): Promise<void> {
-  await prisma.job.deleteMany({ where: { postedByUserId: fixtures.userId } });
+  // Jobs deleted first — they hold the FK to this fixture's own
+  // Category, so the category can only be removed once nothing still
+  // references it. Matching on categoryId (not just postedByUserId) is
+  // required: the imported-job publishing pipeline attributes a
+  // published job to the shared "import system" user, not to this
+  // fixture's own userId, so a test that publishes through that
+  // pipeline using this fixture's category can otherwise leave a job
+  // behind that postedByUserId alone would never find — and the
+  // category delete below would then fail its foreign-key check. Since
+  // this category is freshly created and uniquely slugged per fixture
+  // set (never a shared/real category), every job on it is guaranteed
+  // to be this fixture's own disposable test data.
+  await prisma.job.deleteMany({ where: { OR: [{ postedByUserId: fixtures.userId }, { categoryId: fixtures.categoryId }] } });
   await prisma.employerProfile.deleteMany({ where: { userId: fixtures.userId } });
   await prisma.company.deleteMany({ where: { id: fixtures.companyId } });
   await prisma.user.deleteMany({ where: { id: fixtures.userId } });
+
+  // A test that times out (a pre-existing characteristic of this suite
+  // under real-database contention — see this module's own doc comment)
+  // can leave its in-flight job-creation promise still running after
+  // Vitest has already moved on; if that promise finally inserts its Job
+  // row after the deleteMany above already ran, it lands here as an
+  // orphan the rest of this cleanup never sees, and the category delete
+  // below would otherwise throw and fail teardown for every other
+  // fixture in the same process. Since this category is always a
+  // disposable, uniquely-slugged test row (never shared/real data),
+  // failing to remove it this one time is harmless — it simply waits to
+  // be removed by a future cleanup run — so only this specific,
+  // expected race is swallowed; any other error still propagates.
+  try {
+    await prisma.category.deleteMany({ where: { id: fixtures.categoryId } });
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2003") {
+      throw error;
+    }
+    console.warn(
+      `cleanupModerationTestFixtures: left disposable test category ${fixtures.categoryId} in place — a job from a timed-out test still referenced it.`
+    );
+  }
 }

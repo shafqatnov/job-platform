@@ -6,6 +6,12 @@ import { CompanyProfileView } from "@/features/companies/CompanyProfileView";
 import { breadcrumbJsonLd, type BreadcrumbItem } from "@/components/Breadcrumbs";
 import { getConfiguredSiteUrl } from "@/lib/siteUrl";
 
+/**
+ * No cookies()/headers()/searchParams read on this page, so it's
+ * eligible for real ISR — matches sitemap.ts's own revalidate window.
+ */
+export const revalidate = 3600;
+
 export async function generateMetadata({
   params,
 }: PageProps<"/company/[slug]">): Promise<Metadata> {

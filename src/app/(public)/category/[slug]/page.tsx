@@ -8,6 +8,14 @@ import { getConfiguredSiteUrl } from "@/lib/siteUrl";
 import type { PublicCategoryDetail } from "@/services/jobs/getPublicCategoryBySlug";
 
 /**
+ * No cookies()/headers()/searchParams read on this page, so (unlike the
+ * job detail page) it's eligible for real ISR — matches sitemap.ts's own
+ * revalidate window so category pages can't go stale for longer than the
+ * sitemap already allows.
+ */
+export const revalidate = 3600;
+
+/**
  * Concise, factual description built only from real data already
  * resolved on this category (name + actual current counts) — never an
  * invented statistic, salary claim, or career fact, per this task's own
