@@ -17,6 +17,7 @@ export type FooterLinkGroup = {
 export const PRIMARY_NAV_ITEMS: NavItem[] = [
   { label: "Home", href: "/" },
   { label: "Find Jobs", href: "/jobs" },
+  { label: "Blog", href: "/blog" },
   { label: "About", href: "/about" },
 ];
 
@@ -44,6 +45,7 @@ export const FOOTER_LINK_GROUPS: FooterLinkGroup[] = [
     title: "Company",
     links: [
       { label: "About", href: "/about" },
+      { label: "Blog", href: "/blog" },
       { label: "Contact", href: "/contact" },
     ],
   },
@@ -52,6 +54,8 @@ export const FOOTER_LINK_GROUPS: FooterLinkGroup[] = [
     links: [
       { label: "Privacy Policy", href: "/privacy" },
       { label: "Terms of Service", href: "/terms" },
+      { label: "Editorial Policy", href: "/editorial-policy" },
+      { label: "Advertising Disclosure", href: "/advertising-disclosure" },
     ],
   },
 ];

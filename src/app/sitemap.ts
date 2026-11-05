@@ -4,6 +4,8 @@ import { getPublicJobsForSitemap } from "@/services/jobs/getPublicJobsForSitemap
 import { getPublicCompaniesForSitemap } from "@/services/jobs/getPublicCompaniesForSitemap";
 import { OIL_AND_GAS_CATEGORY_SLUGS } from "@/services/jobs/getOilAndGasHub";
 import { getSiteOrigin } from "@/lib/siteUrl";
+import { getPublishedBlogPosts } from "@/lib/blog/getBlogPosts";
+import { BLOG_CATEGORIES } from "@/constants/blogCategories";
 
 /**
  * Without this, sitemap.ts has no Request-time API call (getSiteOrigin()
@@ -75,11 +77,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries: MetadataRoute.Sitemap = [
     { url: `${baseUrl}/`, lastModified: now, changeFrequency: "daily", priority: 1 },
     { url: `${baseUrl}/jobs`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
+    { url: `${baseUrl}/blog`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
     { url: `${baseUrl}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: `${baseUrl}/contact`, lastModified: now, changeFrequency: "monthly", priority: 0.3 },
     { url: `${baseUrl}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
     { url: `${baseUrl}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${baseUrl}/editorial-policy`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${baseUrl}/advertising-disclosure`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
   ];
+
+  // Published (non-draft) blog posts only — a draft is never listed here,
+  // mirroring blog/[slug]/page.tsx's own generateMetadata, which also
+  // never emits a canonical/indexable entry for one.
+  const publishedBlogPosts = getPublishedBlogPosts();
+  const blogPostEntries: MetadataRoute.Sitemap = publishedBlogPosts.map((post) => ({
+    url: `${baseUrl}/blog/${post.slug}`,
+    lastModified: post.updatedAt ?? post.publishedAt,
+    changeFrequency: "monthly",
+    priority: 0.5,
+  }));
+
+  // Same "only when genuinely populated" rule as the job category
+  // entries below — an empty blog category is excluded rather than
+  // listed as an always-empty page.
+  const blogCategorySlugsWithPosts = new Set(publishedBlogPosts.map((post) => post.categorySlug));
+  const blogCategoryEntries: MetadataRoute.Sitemap = BLOG_CATEGORIES.filter((category) =>
+    blogCategorySlugsWithPosts.has(category.slug)
+  ).map((category) => ({
+    url: `${baseUrl}/blog/category/${category.slug}`,
+    lastModified: now,
+    changeFrequency: "weekly",
+    priority: 0.4,
+  }));
 
   const jobs = await getPublicJobsForSitemap();
 
@@ -138,5 +167,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...companyEntries,
     ...categoryEntries,
     ...oilAndGasEntries,
+    ...blogPostEntries,
+    ...blogCategoryEntries,
   ];
 }
