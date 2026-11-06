@@ -26,6 +26,11 @@ export function getPublishedBlogPosts(): BlogPost[] {
   return getAllBlogPosts().filter((post) => !post.draft);
 }
 
+/** Whether the Blog nav/footer link should be shown (see src/constants/navigation.ts). */
+export function hasPublishedBlogPosts(): boolean {
+  return getPublishedBlogPosts().length > 0;
+}
+
 /**
  * Looks up a post by slug regardless of draft status. The detail page
  * (blog/[slug]/page.tsx) decides what to do with a draft: a 404 in any

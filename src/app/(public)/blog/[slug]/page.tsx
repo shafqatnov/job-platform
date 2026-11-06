@@ -38,6 +38,12 @@ export function isDraftHiddenFromPublic(
   return post.draft === true && nodeEnv === "production";
 }
 
+/** Exported so its wording is directly testable without a full render. */
+export const DRAFT_BANNER_TEXT =
+  "this article is unpublished and only partially fact-checked — some claims still need " +
+  "verification before publication. It is not linked from any public listing and is not " +
+  "indexed by search engines.";
+
 export async function generateMetadata({
   params,
 }: {
@@ -124,9 +130,7 @@ export default async function BlogPostPage({
           <Breadcrumbs items={breadcrumbItems} />
           {post.draft ? (
             <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              <strong>Draft:</strong> this article is a work in progress and has not been
-              published or fact-checked. It is not linked from any public listing and is not
-              indexed by search engines.
+              <strong>Draft:</strong> {DRAFT_BANNER_TEXT}
             </div>
           ) : null}
           <div className="mb-8 flex flex-col gap-2">

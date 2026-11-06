@@ -29,6 +29,17 @@ export const PRIMARY_NAV_ITEMS: NavItem[] = [
  */
 export const EMPLOYER_CTA_ITEM: NavItem = { label: "Post a Job", href: "/employer" };
 
+/**
+ * Filters out the Blog link until at least one post is actually
+ * published — see hasPublishedBlogPosts() in getBlogPosts.ts. Applied to
+ * both PRIMARY_NAV_ITEMS and the "Company" footer group, so the link
+ * appears automatically once a first article goes live, with no other
+ * code change needed.
+ */
+export function visibleNavItems(items: NavItem[], showBlogLink: boolean): NavItem[] {
+  return showBlogLink ? items : items.filter((item) => item.href !== "/blog");
+}
+
 export const FOOTER_LINK_GROUPS: FooterLinkGroup[] = [
   {
     title: "For Candidates",

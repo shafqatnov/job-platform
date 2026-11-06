@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { BlogPost } from "@/lib/blog/types";
 
 // getBlogPostBySlug keeps its real implementation (the real Markdown files)
@@ -10,11 +11,12 @@ vi.mock("@/lib/blog/getBlogPosts", async (importOriginal) => {
   return { ...actual, getBlogPostBySlug: vi.fn(actual.getBlogPostBySlug) };
 });
 
-import { getAllBlogPosts, getBlogPostBySlug } from "@/lib/blog/getBlogPosts";
+import { getAllBlogPosts, getBlogPostBySlug, hasPublishedBlogPosts } from "@/lib/blog/getBlogPosts";
 import BlogPostPage, {
   buildBlogBreadcrumbItems,
   generateMetadata,
   isDraftHiddenFromPublic,
+  DRAFT_BANNER_TEXT,
 } from "@/app/(public)/blog/[slug]/page";
 
 const publishedFixture: BlogPost = {
@@ -66,6 +68,23 @@ describe("blog draft protection", () => {
     const posts = getAllBlogPosts();
     expect(posts).toHaveLength(8);
     expect(posts.every((post) => post.draft === true)).toBe(true);
+  });
+
+  it("hasPublishedBlogPosts is false while every real article is still a draft", () => {
+    expect(hasPublishedBlogPosts()).toBe(false);
+  });
+
+  it("draft banner wording accurately reflects partial fact-checking, not full review", () => {
+    expect(DRAFT_BANNER_TEXT).toContain("unpublished");
+    expect(DRAFT_BANNER_TEXT).toContain("partially fact-checked");
+    expect(DRAFT_BANNER_TEXT).toContain("verification before publication");
+    expect(DRAFT_BANNER_TEXT).not.toContain("has not been published or fact-checked");
+  });
+
+  it("the rendered draft banner uses the updated wording", async () => {
+    const page = await BlogPostPage(params("bosiet-explained"));
+    const html = renderToStaticMarkup(page);
+    expect(html).toContain(DRAFT_BANNER_TEXT);
   });
 
   it("isDraftHiddenFromPublic hides drafts only in a production build", () => {
