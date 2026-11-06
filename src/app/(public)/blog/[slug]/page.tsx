@@ -24,6 +24,20 @@ export function buildBlogBreadcrumbItems(
   ];
 }
 
+/**
+ * A draft is never served by a production build (`next build` / `next
+ * start`, i.e. the public site and every Vercel deployment): its direct URL
+ * returns a 404 there. Under `next dev` (NODE_ENV "development") a draft stays
+ * reachable by its own URL for internal review, with the DRAFT banner.
+ * Pure — the environment is passed in so it is directly testable.
+ */
+export function isDraftHiddenFromPublic(
+  post: Pick<BlogPost, "draft">,
+  nodeEnv: string | undefined = process.env.NODE_ENV
+): boolean {
+  return post.draft === true && nodeEnv === "production";
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -32,8 +46,13 @@ export async function generateMetadata({
   const { slug } = await params;
   const post = getBlogPostBySlug(slug);
 
-  if (!post || post.draft) {
+  if (!post) {
     return { title: "Blog" };
+  }
+
+  if (post.draft) {
+    // Never indexable or followed, in any environment.
+    return { title: "Blog", robots: { index: false, follow: false } };
   }
 
   const siteUrl = getConfiguredSiteUrl();
@@ -65,7 +84,7 @@ export default async function BlogPostPage({
   const { slug } = await params;
   const post = getBlogPostBySlug(slug);
 
-  if (!post) {
+  if (!post || isDraftHiddenFromPublic(post)) {
     notFound();
   }
 

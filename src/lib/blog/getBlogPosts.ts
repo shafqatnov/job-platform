@@ -27,10 +27,10 @@ export function getPublishedBlogPosts(): BlogPost[] {
 }
 
 /**
- * Looks up a post by slug regardless of draft status — the detail page
- * itself is what renders the "DRAFT" banner (see blog/[slug]/page.tsx),
- * so a draft is still directly reachable for internal review by its own
- * URL, just never linked from a listing page and never indexed.
+ * Looks up a post by slug regardless of draft status. The detail page
+ * (blog/[slug]/page.tsx) decides what to do with a draft: a 404 in any
+ * production build, or the "DRAFT" banner under `next dev` for internal
+ * review. A draft is never linked from a listing page and never indexed.
  */
 export function getBlogPostBySlug(slug: string): BlogPost | undefined {
   return getAllBlogPosts().find((post) => post.slug === slug);
