@@ -21,6 +21,14 @@ export async function generateMetadata({
 
   const title = `${category.name} Articles`;
   const description = category.description;
+
+  // An empty category page still loads for visitors, but is never offered
+  // to search engines (no canonical, noindex) until it has a published
+  // post — matching the sitemap, which also omits empty categories.
+  if (getPublishedBlogPostsByCategory(category.slug).length === 0) {
+    return { title, description, robots: { index: false, follow: true } };
+  }
+
   const siteUrl = getConfiguredSiteUrl();
   const path = `/blog/category/${category.slug}`;
 

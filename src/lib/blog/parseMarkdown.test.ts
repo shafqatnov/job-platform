@@ -42,6 +42,24 @@ describe("parseFrontmatter", () => {
     const missingSlug = VALID_POST.replace("slug: example-title\n", "");
     expect(() => parseFrontmatter(missingSlug)).toThrow(/slug/);
   });
+
+  it.each(["yes", "True", "TRUE", "1", "ture", ""])(
+    "rejects an unrecognized draft value %j instead of silently treating the post as published",
+    (value) => {
+      const badDraft = VALID_POST.replace("draft: true", `draft: ${value}`);
+      expect(() => parseFrontmatter(badDraft)).toThrow(/Invalid draft value/);
+    }
+  );
+
+  it("accepts draft: false and a quoted draft value", () => {
+    expect(parseFrontmatter(VALID_POST.replace("draft: true", "draft: false")).frontmatter.draft).toBe(false);
+    expect(parseFrontmatter(VALID_POST.replace("draft: true", 'draft: "true"')).frontmatter.draft).toBe(true);
+  });
+
+  it("treats an absent draft field as published (draft undefined)", () => {
+    const noDraft = VALID_POST.replace("draft: true\n", "");
+    expect(parseFrontmatter(noDraft).frontmatter.draft).toBeUndefined();
+  });
 });
 
 describe("markdownToHtml", () => {

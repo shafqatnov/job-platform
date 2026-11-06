@@ -53,6 +53,15 @@ export function parseFrontmatter(raw: string): { frontmatter: BlogPostFrontmatte
     }
   }
 
+  // Fail closed: a present-but-unrecognized draft value ("yes", "True", a
+  // typo) must never be silently dropped, because an absent draft field
+  // means "published". Only the exact literals true/false are accepted.
+  if ("draft" in fields && typeof fields.draft !== "boolean") {
+    throw new Error(
+      `Invalid draft value "${String(fields.draft)}" in blog post frontmatter (expected true or false).`
+    );
+  }
+
   return {
     frontmatter: {
       title: String(fields.title),

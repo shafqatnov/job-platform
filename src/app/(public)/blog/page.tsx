@@ -9,25 +9,35 @@ import Link from "next/link";
 const TITLE = "Oil & Gas Career Blog";
 const DESCRIPTION =
   "Career guidance, certification explainers, and Gulf employment guidance for oil & gas job seekers, from Jobnura.";
-const siteUrl = getConfiguredSiteUrl();
 const path = "/blog";
 
-export const metadata: Metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
-  ...(siteUrl ? { alternates: { canonical: `${siteUrl}${path}` } } : {}),
-  openGraph: {
-    title: `${TITLE} | Jobnura`,
+export async function generateMetadata(): Promise<Metadata> {
+  // While zero articles are published, the empty blog home still loads for
+  // visitors but is never offered to search engines (no canonical, noindex)
+  // — matching the sitemap, which also omits /blog until then.
+  if (getPublishedBlogPosts().length === 0) {
+    return { title: TITLE, description: DESCRIPTION, robots: { index: false, follow: true } };
+  }
+
+  const siteUrl = getConfiguredSiteUrl();
+
+  return {
+    title: TITLE,
     description: DESCRIPTION,
-    type: "website",
-    ...(siteUrl ? { url: `${siteUrl}${path}` } : {}),
-  },
-  twitter: {
-    card: "summary",
-    title: `${TITLE} | Jobnura`,
-    description: DESCRIPTION,
-  },
-};
+    ...(siteUrl ? { alternates: { canonical: `${siteUrl}${path}` } } : {}),
+    openGraph: {
+      title: `${TITLE} | Jobnura`,
+      description: DESCRIPTION,
+      type: "website",
+      ...(siteUrl ? { url: `${siteUrl}${path}` } : {}),
+    },
+    twitter: {
+      card: "summary",
+      title: `${TITLE} | Jobnura`,
+      description: DESCRIPTION,
+    },
+  };
+}
 
 export default function BlogHomePage() {
   const posts = getPublishedBlogPosts();
