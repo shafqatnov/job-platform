@@ -4,6 +4,8 @@ import { getPublicJobsForSitemap } from "@/services/jobs/getPublicJobsForSitemap
 import { getPublicCompaniesForSitemap } from "@/services/jobs/getPublicCompaniesForSitemap";
 import { OIL_AND_GAS_CATEGORY_SLUGS } from "@/services/jobs/getOilAndGasHub";
 import { getSiteOrigin } from "@/lib/siteUrl";
+import { getPublishedBlogPosts } from "@/lib/blog/getBlogPosts";
+import { buildBlogSitemapEntries } from "@/lib/blog/blogSitemapEntries";
 
 /**
  * Without this, sitemap.ts has no Request-time API call (getSiteOrigin()
@@ -79,7 +81,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/contact`, lastModified: now, changeFrequency: "monthly", priority: 0.3 },
     { url: `${baseUrl}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
     { url: `${baseUrl}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${baseUrl}/editorial-policy`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${baseUrl}/advertising-disclosure`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
   ];
+
+  // Published (non-draft) blog posts only — a draft is never listed here.
+  // /blog itself and each blog category appear only once they have at
+  // least one published post (see buildBlogSitemapEntries).
+  const blogEntries = buildBlogSitemapEntries(getPublishedBlogPosts(), baseUrl, now);
 
   const jobs = await getPublicJobsForSitemap();
 
@@ -138,5 +147,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...companyEntries,
     ...categoryEntries,
     ...oilAndGasEntries,
+    ...blogEntries,
   ];
 }

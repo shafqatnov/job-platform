@@ -17,6 +17,7 @@ export type FooterLinkGroup = {
 export const PRIMARY_NAV_ITEMS: NavItem[] = [
   { label: "Home", href: "/" },
   { label: "Find Jobs", href: "/jobs" },
+  { label: "Blog", href: "/blog" },
   { label: "About", href: "/about" },
 ];
 
@@ -27,6 +28,17 @@ export const PRIMARY_NAV_ITEMS: NavItem[] = [
  * first (see src/app/(dashboard)/layout.tsx), not a dead page.
  */
 export const EMPLOYER_CTA_ITEM: NavItem = { label: "Post a Job", href: "/employer" };
+
+/**
+ * Filters out the Blog link until at least one post is actually
+ * published — see hasPublishedBlogPosts() in getBlogPosts.ts. Applied to
+ * both PRIMARY_NAV_ITEMS and the "Company" footer group, so the link
+ * appears automatically once a first article goes live, with no other
+ * code change needed.
+ */
+export function visibleNavItems(items: NavItem[], showBlogLink: boolean): NavItem[] {
+  return showBlogLink ? items : items.filter((item) => item.href !== "/blog");
+}
 
 export const FOOTER_LINK_GROUPS: FooterLinkGroup[] = [
   {
@@ -44,6 +56,7 @@ export const FOOTER_LINK_GROUPS: FooterLinkGroup[] = [
     title: "Company",
     links: [
       { label: "About", href: "/about" },
+      { label: "Blog", href: "/blog" },
       { label: "Contact", href: "/contact" },
     ],
   },
@@ -52,6 +65,8 @@ export const FOOTER_LINK_GROUPS: FooterLinkGroup[] = [
     links: [
       { label: "Privacy Policy", href: "/privacy" },
       { label: "Terms of Service", href: "/terms" },
+      { label: "Editorial Policy", href: "/editorial-policy" },
+      { label: "Advertising Disclosure", href: "/advertising-disclosure" },
     ],
   },
 ];

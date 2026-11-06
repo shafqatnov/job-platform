@@ -4,12 +4,14 @@ import { PrimaryNav } from "@/components/PrimaryNav";
 import { MobileNav } from "@/components/MobileNav";
 import { AccountNav } from "@/features/auth/AccountNav";
 import { EmployerCtaLink } from "@/features/employers/EmployerCtaLink";
-import { PRIMARY_NAV_ITEMS, EMPLOYER_CTA_ITEM } from "@/constants/navigation";
-
-const MOBILE_NAV_ITEMS = [...PRIMARY_NAV_ITEMS, EMPLOYER_CTA_ITEM];
+import { PRIMARY_NAV_ITEMS, EMPLOYER_CTA_ITEM, visibleNavItems } from "@/constants/navigation";
+import { hasPublishedBlogPosts } from "@/lib/blog/getBlogPosts";
 
 /** Site-wide header: logo, desktop nav with a standout CTA, and mobile nav toggle. */
-export function Header() {
+export async function Header() {
+  const primaryNavItems = visibleNavItems(PRIMARY_NAV_ITEMS, hasPublishedBlogPosts());
+  const mobileNavItems = [...primaryNavItems, EMPLOYER_CTA_ITEM];
+
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-surface/80 backdrop-blur-md">
       <Container className="flex h-16 items-center justify-between gap-4">
@@ -24,12 +26,12 @@ export function Header() {
         </Link>
 
         <div className="hidden items-center gap-8 md:flex">
-          <PrimaryNav items={PRIMARY_NAV_ITEMS} />
+          <PrimaryNav items={primaryNavItems} />
           <EmployerCtaLink />
           <AccountNav />
         </div>
 
-        <MobileNav items={MOBILE_NAV_ITEMS} className="md:hidden">
+        <MobileNav items={mobileNavItems} className="md:hidden">
           <AccountNav />
         </MobileNav>
       </Container>

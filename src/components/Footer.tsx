@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { Container } from "@/components/Container";
-import { FOOTER_LINK_GROUPS, type FooterLinkGroup } from "@/constants/navigation";
+import { FOOTER_LINK_GROUPS, visibleNavItems, type FooterLinkGroup } from "@/constants/navigation";
+import { hasPublishedBlogPosts } from "@/lib/blog/getBlogPosts";
 
 /** Site-wide footer: brand column, organized link groups, and a copyright line. */
-export function Footer() {
+export async function Footer() {
   const year = new Date().getFullYear();
+  const showBlogLink = hasPublishedBlogPosts();
+  const footerGroups = FOOTER_LINK_GROUPS.map((group) => ({
+    ...group,
+    links: visibleNavItems(group.links, showBlogLink),
+  }));
 
   return (
     <footer className="border-t border-border bg-surface-muted">
@@ -23,7 +29,7 @@ export function Footer() {
             Connecting candidates and employers across multiple countries and industries.
           </p>
         </div>
-        {FOOTER_LINK_GROUPS.map((group) => (
+        {footerGroups.map((group) => (
           <FooterColumn key={group.title} group={group} />
         ))}
       </Container>
