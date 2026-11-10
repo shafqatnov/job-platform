@@ -60,6 +60,7 @@ export async function reopenJob(userId: string, jobId: string): Promise<ReopenJo
 
   revalidatePath("/jobs");
   revalidatePath("/");
+  revalidatePath("/sitemap.xml");
 
   return { success: true };
 }

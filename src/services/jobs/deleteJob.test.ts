@@ -14,8 +14,9 @@ import {
   type CandidateTestFixtures,
 } from "@/test-utils/candidateFixtures";
 
+const revalidatePathMock = vi.fn();
 vi.mock("next/cache", () => ({
-  revalidatePath: vi.fn(),
+  revalidatePath: (...args: unknown[]) => revalidatePathMock(...args),
 }));
 
 describe("deleteJob (real dev database, temporary fixtures)", () => {
@@ -43,6 +44,8 @@ describe("deleteJob (real dev database, temporary fixtures)", () => {
     expect(result).toEqual({ success: true });
     const updated = await prisma.job.findUniqueOrThrow({ where: { id: job.id }, select: { deletedAt: true } });
     expect(updated.deletedAt).not.toBeNull();
+
+    expect(revalidatePathMock).toHaveBeenCalledWith("/sitemap.xml");
   });
 
   it("employer cannot permanently delete a job that has an application, and the job/application both remain intact", async () => {

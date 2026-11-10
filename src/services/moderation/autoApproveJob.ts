@@ -60,6 +60,7 @@ export async function autoApproveJob(jobId: string): Promise<AutoApproveResult> 
   // revalidation here either, for the same reason documented there.
   revalidatePath("/jobs");
   revalidatePath("/");
+  revalidatePath("/sitemap.xml");
 
   return { success: true };
 }

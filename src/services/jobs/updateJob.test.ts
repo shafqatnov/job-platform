@@ -8,8 +8,9 @@ import {
   type ModerationTestFixtures,
 } from "@/test-utils/moderationFixtures";
 
+const revalidatePathMock = vi.fn();
 vi.mock("next/cache", () => ({
-  revalidatePath: vi.fn(),
+  revalidatePath: (...args: unknown[]) => revalidatePathMock(...args),
 }));
 
 describe("updateJob (real dev database, temporary fixtures)", () => {
@@ -60,6 +61,8 @@ describe("updateJob (real dev database, temporary fixtures)", () => {
     const updated = await prisma.job.findUniqueOrThrow({ where: { id: job.id }, select: { title: true, description: true } });
     expect(updated.title).toBe("[AI MODERATION TEST] Updated Title");
     expect(updated.description).toBe("An updated description for this automated test job.");
+
+    expect(revalidatePathMock).toHaveBeenCalledWith("/sitemap.xml");
   });
 
   it("employer can edit their own pending_review job", async () => {

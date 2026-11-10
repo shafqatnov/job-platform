@@ -8,8 +8,9 @@ import {
   type ModerationTestFixtures,
 } from "@/test-utils/moderationFixtures";
 
+const revalidatePathMock = vi.fn();
 vi.mock("next/cache", () => ({
-  revalidatePath: vi.fn(),
+  revalidatePath: (...args: unknown[]) => revalidatePathMock(...args),
 }));
 
 describe("closeJob (real dev database, temporary fixtures)", () => {
@@ -35,6 +36,8 @@ describe("closeJob (real dev database, temporary fixtures)", () => {
     const updated = await prisma.job.findUniqueOrThrow({ where: { id: job.id }, select: { status: true, closedAt: true } });
     expect(updated.status).toBe("closed");
     expect(updated.closedAt).not.toBeNull();
+
+    expect(revalidatePathMock).toHaveBeenCalledWith("/sitemap.xml");
   });
 
   it("employer cannot close another employer's job", async () => {
