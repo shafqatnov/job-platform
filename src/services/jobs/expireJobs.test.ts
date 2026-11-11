@@ -39,7 +39,7 @@ describe("expireDueJobs revalidation (real dev database, temporary fixtures)", (
     await cleanupModerationTestFixtures(fixtures);
   });
 
-  it("expires a past-due active job and revalidates /jobs and /", async () => {
+  it("expires a past-due active job and revalidates /jobs, / and /sitemap.xml", async () => {
     const job = await createTestJob(fixtures, {
       status: "active",
       expiresAt: new Date(Date.now() - 60 * 60 * 1000),
@@ -54,6 +54,7 @@ describe("expireDueJobs revalidation (real dev database, temporary fixtures)", (
 
     expect(revalidatePathMock).toHaveBeenCalledWith("/jobs");
     expect(revalidatePathMock).toHaveBeenCalledWith("/");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/sitemap.xml");
   });
 
   it("does NOT revalidate when no job is currently due", async () => {

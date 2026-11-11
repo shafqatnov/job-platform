@@ -59,6 +59,7 @@ export async function approveJob(adminUserId: string, jobId: string): Promise<Mo
     // them) — they already reflect this change with no action needed.
     revalidatePath("/jobs");
     revalidatePath("/");
+    revalidatePath("/sitemap.xml");
 
     return { success: true };
   } catch (error) {
@@ -135,6 +136,7 @@ export async function closeJobAsAdmin(adminUserId: string, jobId: string): Promi
 
     revalidatePath("/jobs");
     revalidatePath("/");
+    revalidatePath("/sitemap.xml");
 
     return { success: true };
   } catch (error) {
@@ -182,6 +184,7 @@ export async function reopenJobAsAdmin(adminUserId: string, jobId: string): Prom
 
     revalidatePath("/jobs");
     revalidatePath("/");
+    revalidatePath("/sitemap.xml");
 
     return { success: true };
   } catch (error) {
@@ -233,6 +236,7 @@ export async function deleteJobAsAdmin(adminUserId: string, jobId: string): Prom
 
     revalidatePath("/jobs");
     revalidatePath("/");
+    revalidatePath("/sitemap.xml");
 
     return { success: true };
   } catch (error) {

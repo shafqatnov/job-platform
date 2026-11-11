@@ -49,6 +49,7 @@ export async function expireDueJobs(): Promise<ExpireJobsResult> {
   if (result.count > 0) {
     revalidatePath("/jobs");
     revalidatePath("/");
+    revalidatePath("/sitemap.xml");
   }
 
   return { expiredCount: result.count };

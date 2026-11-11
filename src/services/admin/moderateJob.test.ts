@@ -51,7 +51,7 @@ describe("moderateJob revalidation (real dev database, temporary fixtures)", () 
     await cleanupModerationTestFixtures(fixtures);
   });
 
-  it("approveJob updates the job to active and revalidates /jobs and /", async () => {
+  it("approveJob updates the job to active and revalidates /jobs, / and /sitemap.xml", async () => {
     const job = await createTestJob(fixtures, { status: "pending_review" });
 
     const result = await approveJob(adminUserId, job.id);
@@ -69,7 +69,8 @@ describe("moderateJob revalidation (real dev database, temporary fixtures)", () 
 
     expect(revalidatePathMock).toHaveBeenCalledWith("/jobs");
     expect(revalidatePathMock).toHaveBeenCalledWith("/");
-    expect(revalidatePathMock).toHaveBeenCalledTimes(2);
+    expect(revalidatePathMock).toHaveBeenCalledWith("/sitemap.xml");
+    expect(revalidatePathMock).toHaveBeenCalledTimes(3);
   });
 
   it("approveJob does NOT revalidate when the job is no longer pending review", async () => {
@@ -138,6 +139,8 @@ describe("admin job lifecycle (close/reopen/delete) (real dev database, temporar
 
     const action = await prisma.moderationAction.findFirst({ where: { adminUserId, targetJobId: job.id, action: "close" } });
     expect(action).not.toBeNull();
+
+    expect(revalidatePathMock).toHaveBeenCalledWith("/sitemap.xml");
   });
 
   it("authorized admin can reopen a closed job that has not expired, and logs a ModerationAction", async () => {
@@ -152,6 +155,8 @@ describe("admin job lifecycle (close/reopen/delete) (real dev database, temporar
 
     const action = await prisma.moderationAction.findFirst({ where: { adminUserId, targetJobId: job.id, action: "reopen" } });
     expect(action).not.toBeNull();
+
+    expect(revalidatePathMock).toHaveBeenCalledWith("/sitemap.xml");
   });
 
   it("admin cannot reopen an already-expired job", async () => {
@@ -171,6 +176,8 @@ describe("admin job lifecycle (close/reopen/delete) (real dev database, temporar
 
     const action = await prisma.moderationAction.findFirst({ where: { adminUserId, targetJobId: job.id, action: "delete" } });
     expect(action).not.toBeNull();
+
+    expect(revalidatePathMock).toHaveBeenCalledWith("/sitemap.xml");
   });
 
   it("admin cannot delete a job with an application — reports the exact reason and does not delete", async () => {

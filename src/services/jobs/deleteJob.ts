@@ -61,6 +61,7 @@ export async function deleteJob(userId: string, jobId: string): Promise<DeleteJo
 
   revalidatePath("/jobs");
   revalidatePath("/");
+  revalidatePath("/sitemap.xml");
 
   return { success: true };
 }

@@ -39,6 +39,7 @@ export async function closeJob(userId: string, jobId: string): Promise<CloseJobR
   // active until the next deployment.
   revalidatePath("/jobs");
   revalidatePath("/");
+  revalidatePath("/sitemap.xml");
 
   return { success: true };
 }

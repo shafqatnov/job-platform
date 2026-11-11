@@ -181,6 +181,7 @@ export async function updateJob(input: UpdateJobInput): Promise<UpdateJobResult>
     // pending_review (not shown on either page yet either way).
     revalidatePath("/jobs");
     revalidatePath("/");
+    revalidatePath("/sitemap.xml");
 
     return { success: true };
   } catch (error) {

@@ -28,7 +28,7 @@ describe("autoApproveJob revalidation (real dev database, temporary fixtures)", 
     await cleanupModerationTestFixtures(fixtures);
   });
 
-  it("publishes an eligible pending job and revalidates /jobs and /", async () => {
+  it("publishes an eligible pending job and revalidates /jobs, / and /sitemap.xml", async () => {
     const job = await createTestJob(fixtures, { status: "pending_review" });
 
     const result = await autoApproveJob(job.id);
@@ -45,7 +45,8 @@ describe("autoApproveJob revalidation (real dev database, temporary fixtures)", 
 
     expect(revalidatePathMock).toHaveBeenCalledWith("/jobs");
     expect(revalidatePathMock).toHaveBeenCalledWith("/");
-    expect(revalidatePathMock).toHaveBeenCalledTimes(2);
+    expect(revalidatePathMock).toHaveBeenCalledWith("/sitemap.xml");
+    expect(revalidatePathMock).toHaveBeenCalledTimes(3);
   });
 
   it("does NOT revalidate when the job is no longer pending review (lost the race / already decided)", async () => {
